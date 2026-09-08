@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#070707" />
+  <title>FREE v0.2</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <div class="brand">FREE</div>
+        <div class="tag">your identity · your keys · your messages</div>
+      </div>
+      <div id="status" class="pill">offline</div>
+    </header>
+
+    <section class="card identity-card">
+      <div class="row between">
+        <div>
+          <h2>Identity</h2>
+          <div id="fingerprint" class="mono muted">creating…</div>
+        </div>
+        <button id="shareBtn">Share identity</button>
+      </div>
+      <div id="sharePanel" class="share hidden">
+        <img id="qr" alt="FREE identity QR" />
+        <textarea id="inviteLink" readonly></textarea>
+        <button id="copyInvite">Copy link</button>
+      </div>
+    </section>
+
+    <section class="grid">
+      <aside class="card contacts">
+        <h2>Contacts</h2>
+        <div class="addbox">
+          <input id="inviteInput" placeholder="Paste FREE invite link" />
+          <button id="addContact">Add</button>
+        </div>
+        <div id="contacts"></div>
+      </aside>
+
+      <section class="card chat">
+        <div class="chat-head">
+          <div>
+            <h2 id="chatTitle">Select a contact</h2>
+            <div id="chatSub" class="mono muted"></div>
+          </div>
+        </div>
+        <div id="messages" class="messages"></div>
+        <form id="composer" class="composer">
+          <input id="messageInput" autocomplete="off" placeholder="Encrypted message…" disabled />
+          <button id="sendBtn" disabled>Send</button>
+        </form>
+      </section>
+    </section>
+
+    <footer>FREE app ≠ FREE network · relay stores ciphertext only</footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

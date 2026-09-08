@@ -1,0 +1,13 @@
+{
+  "name": "free-protocol-v0.2",
+  "version": "0.2.0",
+  "private": true,
+  "description": "FREE: pseudonymous, user-owned identity, E2EE messenger internet-ready prototype",
+  "type": "commonjs",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "check": "node --check server.js && node --check public/app.js"
+  }
+}

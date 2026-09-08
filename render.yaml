@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: free-relay
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: MAX_QUEUE_PER_ID
+        value: "500"
+      - key: HTTP_RATE_PER_MIN
+        value: "120"
+      - key: WS_RATE_PER_MIN
+        value: "180"
