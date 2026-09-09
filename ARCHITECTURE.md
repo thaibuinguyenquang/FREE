@@ -1,31 +1,30 @@
-# FREE v0.1 architecture
+# FREE-006 Architecture
 
-## Principles
-1. FREE app is a client, not the network.
-2. Identity is generated and held by the user device.
-3. No phone number, email address, Apple/Google/Facebook identity is required.
-4. Relay infrastructure routes ciphertext; it does not possess message decryption keys.
-5. Message payloads are not stored on a blockchain.
-6. Identity is pseudonymous but persistent, allowing block/reputation/rules later.
+## Security invariant
 
-## Components
-- Client: identity, key storage, contact book, encryption/decryption, chat UI.
-- FREE invite: portable public identity bundle encoded in a URL/QR.
-- Relay: WebSocket routing based on pseudonymous fingerprint.
-- Offline queue: ciphertext envelopes persisted until recipient reconnects.
+FREE-006 preserves the FREE-PQ1 post-quantum E2EE path. Federation nodes are untrusted routers. They must never be required to hold message plaintext, account private keys, Recovery secrets or PINs.
 
-## Crypto in v0.1
-- Long-term ECDH P-256 key pair for shared-secret derivation.
-- Long-term ECDSA P-256 key pair for sender authentication.
-- HKDF-SHA256 derives a conversation AES key from ECDH secret.
-- AES-256-GCM encrypts each message with a fresh 96-bit IV.
-- ECDSA signs routing-bound envelope data.
+## Account identity
 
-## Next protocol steps
-- X3DH/Double Ratchet or equivalent for forward secrecy and post-compromise security.
-- Multi-device identity and device revocation.
-- Signed prekeys for asynchronous first contact.
-- Contact verification via safety numbers / QR verification.
-- Encrypted attachment transport with chunking.
-- Group messaging protocol.
-- Relay federation/discovery and client interoperability specification.
+One FREE account has one self-certifying PQ Account Identity. Multiple devices will later be authorized under that same identity; devices do not become separate user identities.
+
+## Node federation
+
+```text
+Browser A -> Node A <==== federation ====> Node B <- Browser B
+                 \\                     //
+                  <==== Node C =========>
+```
+
+Browser transport: `/ws`
+Node federation: `/federation`
+
+A node can start with zero or many bootstrap URLs. Nodes exchange public node URLs and local pseudonymous presence advertisements. Routing first uses learned recipient routes, then a bounded TTL flood when no route is known.
+
+This is deliberately an availability/decentralization foundation, not the final metadata-private routing layer.
+
+## Trust boundary
+
+A malicious node can drop, delay, replay or observe routing metadata. It should not be able to forge a valid FREE user message because envelopes are end-to-end ML-DSA signed; it should not read content because content is encrypted from the ML-KEM-derived message secret.
+
+Production work still needs replay windows, ratcheting, private discovery, metadata-hiding transport, authenticated node policy/capabilities, robust routing and abuse/Sybil defenses.

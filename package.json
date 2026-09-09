@@ -1,13 +1,21 @@
 {
-  "name": "free-protocol-v0.2",
-  "version": "0.2.0",
+  "name": "free-protocol",
+  "version": "0.6.0",
   "private": true,
-  "description": "FREE: pseudonymous, user-owned identity, E2EE messenger internet-ready prototype",
+  "description": "FREE-006 post-quantum-native messenger with federated P2P node foundation",
   "type": "commonjs",
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=20.19.0" },
   "scripts": {
+    "postinstall": "node scripts/build-pq.mjs",
     "start": "node server.js",
+    "node": "node server.js",
     "dev": "node server.js",
-    "check": "node --check server.js && node --check public/app.js"
+    "check": "node --check server.js && node --check public/app.js && node --check scripts/pq-entry.mjs && node --check scripts/build-pq.mjs"
+  },
+  "dependencies": {
+    "@noble/post-quantum": "0.7.1",
+    "esbuild": "^0.25.9",
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.3"
   }
 }

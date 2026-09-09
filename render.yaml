@@ -8,10 +8,6 @@ services:
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
-        value: "20"
-      - key: MAX_QUEUE_PER_ID
-        value: "500"
-      - key: HTTP_RATE_PER_MIN
-        value: "120"
-      - key: WS_RATE_PER_MIN
-        value: "180"
+        value: 22.16.0
+      - key: PUBLIC_NODE_URL
+        value: https://free-relay.onrender.com
