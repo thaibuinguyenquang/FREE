@@ -1,5 +1,3 @@
-# FREE Economy — FREE-009 testnet accounting
+# FREE Economy — Genesis Testnet
 
-FREE-009 keeps FREE Test Credits non-monetary and non-transferable and adds deterministic inflation accounting. Default development policy: 5% annual inflation, 1-day epochs, with each epoch's new emission allocated 10% founder/developer, 65% node pool, 15% ecosystem and 10% treasury. Founder reward is a share of new emission only. No user balance is debited or rewritten.
-
-Economic state is separate from communication identity and user secrets. Production work still requires signed/versioned policy manifests, post-quantum authority keys, timelocks, consensus/validator enforcement, challenge-based Proof of Useful Service, anti-Sybil protections, audits and legal review.
+FREE-011 moves periodic inflation accounting into the native FREE Chain testnet. Default epoch is 60 seconds for observable testing; annualized inflation is 5%. Each epoch's new emission is allocated 10% Founder/Developer, 65% Node Pool, 15% Ecosystem and 10% Treasury. Founder reward is automatic protocol emission and never a debit from user balances. Testnet FREE has no monetary value and is not yet transferable.

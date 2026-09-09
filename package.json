@@ -1,8 +1,8 @@
 {
   "name": "free-protocol",
-  "version": "0.9.0",
+  "version": "0.11.0",
   "private": true,
-  "description": "FREE-009 post-quantum-native communication network with deterministic inflation and founder-reward testnet accounting",
+  "description": "FREE-011 post-quantum messenger and FREE Chain Genesis Testnet",
   "type": "commonjs",
   "engines": {
     "node": ">=20.19.0"
@@ -12,7 +12,8 @@
     "start": "node server.js",
     "node": "node server.js",
     "dev": "node server.js",
-    "check": "node --check server.js && node --check public/app.js && node --check scripts/pq-entry.mjs && node --check scripts/build-pq.mjs"
+    "check": "node --check server.js && node --check public/app.js && node --check scripts/pq-entry.mjs && node --check scripts/build-pq.mjs",
+    "founder:address": "node scripts/founder-wallet.mjs"
   },
   "dependencies": {
     "@noble/post-quantum": "0.7.1",

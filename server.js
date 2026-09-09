@@ -6,10 +6,12 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-009';
+const VERSION = 'FREE-011';
+const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data');
+const freeChain = new FreeChain({dataDir: DATA_DIR, pqModule, version: VERSION});
 const QUEUE_FILE = path.join(DATA_DIR, 'offline-queue.json');
 const MAX_FRAME_BYTES = Number(process.env.MAX_FRAME_BYTES || 1024 * 1024);
 const MAX_QUEUE_PER_ID = Number(process.env.MAX_QUEUE_PER_ID || 500);
@@ -287,7 +289,7 @@ const server = http.createServer(async (req,res)=>{
     const host=req.headers.host||`localhost:${PORT}`; const url=new URL(req.url,`http://${host}`);
     if(url.pathname==='/health'){
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:clients.size,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,contributingNodes:nodeServices.size}));
+      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:clients.size,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size}));
     }
     if(url.pathname==='/api/card'){
       const id=(url.searchParams.get('id')||'').toLowerCase();
@@ -302,6 +304,21 @@ const server = http.createServer(async (req,res)=>{
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
       return res.end(JSON.stringify({version:VERSION,economy:publicEconomy(),serviceAccounting:{name:'FREE Test Credits',monetaryValue:false,storageNodes:storageNodes.size,contributingNodes:services.length,totalStoredBytes:services.reduce((n,x)=>n+x.storedBytes,0),totalCredits:Number(services.reduce((n,x)=>n+x.credits,0).toFixed(6))}}));
     }
+    if(url.pathname==='/api/chain'){
+      await freeChain.settle();
+      res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
+      return res.end(JSON.stringify(freeChain.publicSummary()));
+    }
+    if(url.pathname==='/api/chain/blocks'){
+      await freeChain.settle(); const limit=Number(url.searchParams.get('limit')||20);
+      res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
+      return res.end(JSON.stringify({chainId:freeChain.chain.chainId,blocks:freeChain.blocks(limit)}));
+    }
+    if(url.pathname==='/api/founder'){
+      await freeChain.settle();
+      res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
+      return res.end(JSON.stringify(freeChain.publicFounder()));
+    }
     if(url.pathname==='/api/qr'){
       const text=url.searchParams.get('text')||''; if(!text||text.length>4000){res.writeHead(400);return res.end('bad text')}
       const svg=await QRCode.toString(text,{type:'svg',errorCorrectionLevel:'M',margin:2});
@@ -309,7 +326,7 @@ const server = http.createServer(async (req,res)=>{
     }
     let reqPath=url.pathname==='/'?'/index.html':url.pathname; const filePath=path.normalize(path.join(PUBLIC_DIR,reqPath));
     if(!filePath.startsWith(PUBLIC_DIR+path.sep) && filePath!==path.join(PUBLIC_DIR,'index.html')){res.writeHead(403);return res.end('forbidden')}
-    fs.readFile(filePath,(err,data)=>{if(err){res.writeHead(404);return res.end('not found')} const ext=path.extname(filePath); res.writeHead(200,{'content-type':mime[ext]||'application/octet-stream','cache-control':ext==='.html'?'no-store':'public, max-age=3600'});res.end(data)});
+    fs.readFile(filePath,(err,data)=>{if(err){res.writeHead(404);return res.end('not found')} const ext=path.extname(filePath); res.writeHead(200,{'content-type':mime[ext]||'application/octet-stream','cache-control':'no-store'});res.end(data)});
   }catch(e){console.error('http error:',e.message);res.writeHead(500);res.end('server error')}
 });
 
@@ -378,4 +395,4 @@ server.on('upgrade',(req,socket)=>{
     const cleanup=()=>{if(id&&clients.get(id)===socket){clients.delete(id);announcePresence(id,false)}if(id)storageNodes.delete(id)};socket.on('close',cleanup);socket.on('error',cleanup);
   }catch{socket.destroy()}
 });
-server.listen(PORT,'0.0.0.0',()=>{console.log(`${VERSION} node ${NODE_ID} running on port ${PORT}`);schedulePeerConnections()});
+(async()=>{await freeChain.init();freeChain.start();server.listen(PORT,'0.0.0.0',()=>{console.log(`${VERSION} node ${NODE_ID} running on port ${PORT}`);console.log(`FREE Chain genesis ${freeChain.chain.blocks[0].hash}`);schedulePeerConnections()})})().catch(err=>{console.error('fatal startup:',err);process.exit(1)});

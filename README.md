@@ -1,88 +1,35 @@
-# FREE-009 — Secure Identity & Recovery UX
+# FREE-011 — Genesis Testnet
 
-FREE is an experimental pseudonymous, post-quantum-native E2EE communication protocol. **FREE app ≠ FREE network.** FREE-009 continues directly from FREE-006 and keeps the federated node foundation while fixing the PQ client authentication flow and adding a user-facing account/recovery experience.
+FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-011 introduces the first native **FREE Chain Genesis Testnet** while preserving the FREE-PQ1 communication path and the rule that user secrets never belong to the chain or founder.
 
-## What changed in FREE-009
+## FREE Chain now exists as a testnet ledger
 
-- Fixes the browser ↔ FREE node PQ challenge-response flow by signing a canonical `FREE-AUTH-1:<id>:<challenge>` payload with ML-DSA-65. The node recomputes the self-certifying account ID from the published ML-KEM/ML-DSA public keys and verifies the signature before accepting the socket.
-- One FREE account keeps one PQ Account Identity. Devices are not separate user identities.
-- First-run onboarding now offers **Create FREE ID** or **Restore FREE ID**.
-- Adds a user-set display name. Display name can change without changing the cryptographic FREE ID.
-- Adds a personal 4–6 digit PIN for account recovery.
-- Adds an Account Recovery Kit. Restoring on another device requires both the Recovery Kit and the PIN.
-- Adds Recovery Kit refresh, export/copy, and PIN change. Changing the PIN produces a new Recovery Kit while preserving the same FREE Account Identity.
-- Adds Vietnamese and English UI; Vietnamese is selected automatically for Vietnamese browser locales and can be switched manually.
-- Keeps Short FREE ID for human sharing, Full cryptographic ID for verification, QR/link invites, PQ E2EE messaging, encrypted distributed-vault experiment, and FREE-006 node federation.
+On first node start, FREE-011 creates and persists `data/free-chain-testnet.json` with a Genesis Block. The chain has SHA-512-derived 256-bit block hashes, previous-block linkage, transaction root, state root, native FREE accounting, security epochs, economic policy, and a persisted ML-DSA-65 validator authority. Blocks after genesis are signed with ML-DSA-65.
 
-## Security model
+The default testnet epoch is 60 seconds so inflation/reward can be observed quickly. Default development policy is 5% annualized inflation, allocating each epoch's new emission: 10% Founder/Developer, 65% Node Pool, 15% Ecosystem, 10% Treasury. These are testnet parameters, not final tokenomics and the token has **no monetary value** in FREE-011.
 
-Active public-key security path remains `FREE-PQ1`:
+Founder reward is protocol emission, not an arbitrary admin balance edit. FREE-011 now derives a dedicated **Founder Genesis Economic Identity** from a founder-held secret using a deterministic ML-DSA-65 keypair. Its address format is `FREE1-GENESIS-<40-hex>`, where the suffix is derived from the ML-DSA-65 public key. The secret/private key is never written to chain state or returned by an API. The same `FOUNDER_GENESIS_SECRET` produces the same founder address across redeploys. `/api/founder` exposes only the public founder address, public key and accrued testnet balance; `/api/chain` and `/api/chain/blocks` expose chain state and blocks.
 
-- ML-KEM-768 — key establishment
-- ML-DSA-65 — identity signatures and node authentication
-- HKDF-SHA-512 — message-key derivation
-- AES-256-GCM — symmetric authenticated encryption
+## User privacy boundary
 
-FREE-009 does not reintroduce RSA, ECDH, ECDSA, or a classical fallback into the active identity/message path.
+FREE Chain contains no message plaintext, photos, files, Recovery Kits, PINs, account private keys or vault plaintext. Founder/economic/upgrade authority must never imply decryption authority. Account Identity, Node Identity, Payment/Economic Identity and Protocol Authority are separate namespaces.
 
-Private account keys remain in the user's encrypted/local recovery material and browser storage. FREE nodes receive public identity cards and ciphertext, never the account private key or PIN.
+## UI startup repair
 
-## Account Recovery Kit
+FREE-009 could render a black page when client initialization failed while both onboarding and app shell were hidden. FREE-011 adds a visible boot fallback that remains on screen with an error if initialization fails, and disables one-hour caching for static app assets during the testnet phase. **Do not clear browser site data** while diagnosing an existing identity.
 
-The Account Recovery Kit is an encrypted snapshot of the FREE account state. The kit contains high-entropy recovery material and ciphertext; the user PIN is combined with that recovery material through a KDF before the snapshot can be decrypted.
+## Post-quantum security
 
-The intended user model is simple:
+Active communication remains FREE-PQ1: ML-KEM-768, ML-DSA-65, AES-256-GCM and HKDF-SHA-512. FREE Chain testnet block authority uses ML-DSA-65. No RSA/ECDH/ECDSA fallback is added to the active critical path. Crypto-suite/security-epoch versioning is retained so future security migrations are possible.
 
-```text
-Recovery Kit + Personal PIN -> restore the same FREE Account Identity
-```
+## What is not claimed yet
 
-Important prototype limitation: the agreed 5–20 failed-attempt policy is **not yet rollback-resistant at network level**. A purely local counter can be reset by a hostile client, so FREE-009 does not claim that this requirement is cryptographically enforced yet. Do not market the prototype as having irreversible attempt-count enforcement.
+FREE-011 is a **Genesis Testnet**, not a production public blockchain. It currently has one authoritative block producer per deployment and does not yet have multi-validator consensus, fork choice, peer block synchronization, transferable user wallets, production Proof of Useful Service, Sybil resistance, signed governance manifests, timelocked upgrades, or a token with monetary value. The founder now has cryptographic custody of the testnet economic identity through `FOUNDER_GENESIS_SECRET`, but transferable wallet transactions are not implemented yet.
 
-The Recovery Kit should be regenerated after important account-data changes if the user wants the exported snapshot to include the latest contacts/chat state. The distributed-vault system remains a separate experimental storage path.
+## Run
 
-## Identity model
+Requires Node.js 20.19+ (Render configuration uses Node 22.16). Run `npm install` then `npm start`. Open `/health`, `/api/chain`, and `/api/chain/blocks?limit=5` for diagnostics. Keep one `README.md`; the living project White Paper is `WHITEPAPER.md`.
 
-```text
-FREE Account
-    |
-    +-- one PQ Account Identity
-    +-- one Short FREE ID
-    +-- one Full cryptographic ID
-    +-- display name (changeable)
-    +-- authorized devices (future complete protocol)
-```
+## Founder Genesis setup
 
-A phone, PC, or tablet is not a new user identity. Future device authorization will authorize devices under the same Account Identity.
-
-## Federation
-
-FREE-009 retains the FREE-006 `/federation` node layer. Render may remain the first bootstrap/test node, but the network design does not require Render to be the permanent owner of the protocol. Federation improves availability and decentralization; it does **not yet provide metadata anonymity**.
-
-## Deploy from the currently live FREE-006
-
-Replace the repository root with the contents of this ZIP and commit to `main`. Render will run `npm install`, build `public/pq.bundle.js`, and start the service. `/health` should report `"version":"FREE-009"`.
-
-Do not clear browser site data before testing. The browser that already created the FREE-006 PQ identity will keep that same identity and FREE-009 will ask only for the missing display name/PIN/Recovery setup.
-
-## Prototype status
-
-FREE-009 is not production-secure. Required future work includes an audited forward-secret/post-compromise-secure PQ messaging session protocol, rollback-resistant recovery-attempt enforcement and crypto-erasure, complete multi-device authorization/revocation, metadata-private discovery/routing, attachment encryption/lifecycle, abuse controls, durable decentralized storage, and independent cryptographic/security review.
-
-
-## FREE-009 ecosystem foundation
-- Voluntary node contribution with a separate local Node Identity and configurable storage capacity.
-- FREE Test Credits (no monetary value, non-transferable) based on encrypted-storage receipts for testnet measurement.
-- Account Identity != Node Identity != future Payment Identity.
-- `/api/network` exposes aggregate testnet service metrics only.
-- This is NOT a real token launch and the receipt model is NOT Sybil-resistant yet.
-- Real-token prerequisites: verifiable useful-service challenges, replication/repair, anti-Sybil, privacy-preserving accounting, security audits and legal review.
-
-
-## FREE-009 deterministic economic authority foundation
-
-FREE-009 adds a **testnet accounting model** for periodic token inflation and automatic founder/developer allocation. It does not create a transferable or monetary token. The default simulation uses a 5% annual inflation rate, daily epochs, and allocates each epoch's **new emission** as 10% founder/developer, 65% node pool, 15% ecosystem and 10% treasury. These are development defaults, not final tokenomics.
-
-Founder reward is calculated only from newly emitted units and never debits or rewrites user balances. Economic accounting is persisted separately in `data/economy-state.json`; it has no access path to user private keys, PINs, Recovery Kits, plaintext messages or vault decryption. `/api/network` exposes the active public policy and aggregate accounting for inspection.
-
-The production design requires signed/versioned Economic Policy Manifests, separate post-quantum Economic/Upgrade/Emergency/Treasury authorities, activation timelocks, bounded emergency controls, validator/consensus rules, service-proof anti-Sybil logic, audits and legal review before any real transferable token.
+Before deploying FREE-011, create/store one high-entropy `FOUNDER_GENESIS_SECRET` outside Git and set it as a secret environment variable in Render. Do not change it after Genesis. Run `FOUNDER_GENESIS_SECRET=... npm run founder:address` on a trusted machine to derive the same public address locally. The deployment refuses to start if the secret is missing or too short, preventing accidental genesis with an unstable founder address.

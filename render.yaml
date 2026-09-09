@@ -11,3 +11,5 @@ services:
         value: 22.16.0
       - key: PUBLIC_NODE_URL
         value: https://free-relay.onrender.com
+      - key: FOUNDER_GENESIS_SECRET
+        sync: false

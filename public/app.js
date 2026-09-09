@@ -5,6 +5,7 @@ const dbName = 'free-v01'; // compatibility container; FREE-007 keeps the same I
 const CRYPTO_SUITE = 'FREE-PQ1';
 const KEM_NAME = 'ML-KEM-768';
 const SIG_NAME = 'ML-DSA-65';
+const APP_VERSION='FREE-011';
 let db, me=null, profile=null, ws=null, selectedId=null;
 let contacts={}, chats={}, pendingVault=new Map();
 let storageEnabled=false, currentLang='vi', authTimer=null, nodeServiceId='', nodeCapacityMb=1024;
@@ -145,13 +146,18 @@ async function finishExistingSetup(){
  if(!me)me=await createIdentity();profile={displayName:name,createdAt:Date.now()};await setKV('profile',profile);contacts=await getKV('contacts')||{};chats=await getKV('chats')||{};const kit=await saveNewAccountKit(pin);$('#createdName').textContent=name;$('#createdShort').textContent=me.shortId;$('#createdQr').src=`/api/qr?text=${encodeURIComponent(inviteLink())}`;$('#createdRecovery').value=kit;showStep('createdStep')
 }
 async function restoreAccountFromKit(){const raw=$('#restoreKitInput').value.trim(),pin=$('#restorePin').value.trim();const {state}=await decryptAccountRecoveryKit(raw,pin);await setKV('identity',state.identity);await setKV('profile',state.profile||{displayName:'FREE'});await setKV('contacts',state.contacts||{});await setKV('chats',state.chats||{});await setKV('accountRecoveryKit',raw);location.reload()}
+
+async function refreshChain(){try{const r=await fetch('/api/chain',{cache:'no-store'});if(!r.ok)return;const c=await r.json();$('#chainHeight').textContent=String(c.height??0);$('#founderAddress').textContent=c.addresses?.founder||'—';$('#founderBalance').textContent=`${Number(c.balances?.founder||0).toFixed(6)} FREE`;$('#genesisHash').textContent=c.genesisHash||'—';$('#latestBlockHash').textContent=c.latestBlockHash||'—';const secs=Math.max(0,Math.ceil((Number(c.nextEpochAt||0)-Date.now())/1000));$('#chainNextEpoch').textContent=`Testnet · reward epoch tiếp theo ~ ${secs}s`; }catch(e){console.warn('chain status',e)}}
+function bootReady(){const b=$('#bootFallback');if(b)b.hidden=true}
+function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');b.querySelector('span').textContent=`FREE-011 không khởi động được: ${e?.message||e}`;b.querySelector('small').textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
+
 async function init(){
  currentLang=localStorage.getItem('free-lang')||((navigator.language||'').toLowerCase().startsWith('vi')?'vi':'en');setLanguage(currentLang);db=await openDB();
  const raw=await getKV('identity');profile=await getKV('profile');contacts=await getKV('contacts')||{};chats=await getKV('chats')||{};storageEnabled=!!(await getKV('storageEnabled'));nodeServiceId=await getKV('nodeServiceId');if(!nodeServiceId){nodeServiceId=[...crypto.getRandomValues(new Uint8Array(24))].map(x=>x.toString(16).padStart(2,'0')).join('');await setKV('nodeServiceId',nodeServiceId)}nodeCapacityMb=Number(await getKV('nodeCapacityMb'))||1024;$('#nodeServiceId').textContent=nodeServiceId;$('#nodeCapacity').value=String(nodeCapacityMb);$('#storageToggle').checked=storageEnabled;updateStorageText();
  if(raw?.cryptoSuite===CRYPTO_SUITE){me=wrapIdentity(raw);if(!profile){$('#onboarding').hidden=false;showStep('createStep');$('#newName').value='';}else{showApp();const kit=await getKV('accountRecoveryKit');if(kit)$('#accountRecoveryKit').value=kit}}
  else{$('#onboarding').hidden=false;showStep('welcomeStep')}
  const hash=location.hash;if(me&&profile&&hash.startsWith('#freeid=')){try{await addFromInvite(location.href);history.replaceState(null,'',location.pathname)}catch(e){alert(e.message)}}
- const vk=await getKV('lastRecoveryKit');if(vk)$('#recoveryKit').value=vk;
+ const vk=await getKV('lastRecoveryKit');if(vk)$('#recoveryKit').value=vk;await refreshChain();setInterval(refreshChain,5000);bootReady();
 }
 
 $('#langVI').onclick=()=>setLanguage('vi');$('#langEN').onclick=()=>setLanguage('en');
@@ -169,4 +175,4 @@ $('#shareInvite').onclick=async()=>{const url=inviteLink();if(navigator.share)aw
 $('#addContact').onclick=async()=>{try{await addFromInvite($('#inviteInput').value);$('#inviteInput').value=''}catch(e){alert(e.message)}};
 $('#composer').onsubmit=async e=>{e.preventDefault();const input=$('#messageInput'),text=input.value.trim();if(!text)return;input.value='';try{await sendMessage(text)}catch(err){alert(err.message)}};
 $('#storageToggle').onchange=toggleStorage;$('#nodeCapacity').onchange=async()=>{nodeCapacityMb=Math.max(100,Math.min(102400,Number($('#nodeCapacity').value)||1024));await setKV('nodeCapacityMb',nodeCapacityMb);if(storageEnabled&&ws?.readyState===1)ws.send(JSON.stringify({type:'storage-advertise',enabled:true,nodeId:nodeServiceId,capacityMb:nodeCapacityMb}))};$('#backupBtn').onclick=()=>createVault().catch(e=>{alert(e.message);$('#vaultProgress').textContent=e.message;$('#backupBtn').disabled=false});$('#restoreBtn').onclick=()=>restoreVault().catch(e=>{alert(e.message);$('#vaultProgress').textContent=e.message});$('#copyKit').onclick=async()=>navigator.clipboard.writeText($('#recoveryKit').value);
-init().catch(e=>{console.error(e);status('startup error',false);alert(`FREE startup error: ${e.message}`)});
+init().catch(e=>{console.error(e);status('startup error',false);bootError(e)});

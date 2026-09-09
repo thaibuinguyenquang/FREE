@@ -4,10 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#080808">
-  <title>FREE-007 · Secure Identity</title>
+  <title>FREE-011 · Genesis Testnet</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <div id="bootFallback" class="boot-fallback"><strong>F R E E</strong><span>Đang khởi động FREE-011…</span><small>Nếu màn hình này không biến mất, ứng dụng sẽ hiển thị lỗi thay vì để màn hình đen.</small></div>
   <div class="lang-switch" aria-label="Language"><button id="langVI">VI</button><button id="langEN">EN</button></div>
 
   <section id="onboarding" class="onboarding" hidden>
@@ -121,9 +122,16 @@
         <div><label>Dung lượng muốn đóng góp</label><div class="inline"><input id="nodeCapacity" type="number" min="100" max="102400" step="100" value="1024"><span>MB</span></div></div>
         <div><label>Node Identity</label><code id="nodeServiceId">—</code><p class="mini">Tách biệt với FREE Account Identity. Payment Identity tương lai cũng sẽ tách riêng.</p></div>
       </div>
-      <div class="recovery-box"><strong>Proof of Useful Service — foundation</strong><p class="mini">FREE-009 ghi nhận encrypted-storage receipts để đo dịch vụ thật. Chưa phải cơ chế chống Sybil/Proof-of-Service production.</p><div id="serviceStats" class="note">0 bytes · 0 receipts</div></div>
+      <div class="recovery-box"><strong>Proof of Useful Service — foundation</strong><p class="mini">FREE-011 ghi nhận encrypted-storage receipts để đo dịch vụ thật. Chưa phải cơ chế chống Sybil/Proof-of-Service production.</p><div id="serviceStats" class="note">0 bytes · 0 receipts</div></div>
     </section>
 
+
+    <section class="card network-card" id="chainCard">
+      <div class="section-head"><div><span class="eyebrow">FREE CHAIN · GENESIS TESTNET</span><h2>Blockchain của FREE</h2></div><div class="node-count"><strong id="chainHeight">0</strong><span>block height</span></div></div>
+      <p class="lead">FREE Chain testnet có Genesis Block, hash-link, state root, native FREE accounting và block sau genesis được ký ML-DSA-65. Chat, file và khóa người dùng không nằm trên chain.</p>
+      <div class="settings-grid"><div><label>Founder Economic Address</label><code id="founderAddress">—</code><p class="mini">Tách khỏi FREE chat identity.</p></div><div><label>Founder reward đã ghi trên chain</label><strong id="founderBalance">0 FREE</strong><p class="mini" id="chainNextEpoch">—</p></div></div>
+      <div class="recovery-box"><strong>Genesis Hash</strong><code id="genesisHash">—</code><br><strong>Latest Block</strong><code id="latestBlockHash">—</code></div>
+    </section>
     <section class="card vault-card">
       <div class="section-head"><div><span class="eyebrow" data-i18n="advanced">NÂNG CAO · FREE NETWORK</span><h2 data-i18n="distributedVault">Kho mã hóa phân tán</h2></div><div class="node-count"><strong id="storageCount">0</strong><span data-i18n="storageNodes">storage nodes online</span></div></div>
       <p class="lead" data-i18n="vaultLead">Phần thử nghiệm: dữ liệu được mã hóa trên thiết bị rồi chia thành 5 shard; bất kỳ 3 shard có thể dựng lại ciphertext.</p>
@@ -139,7 +147,7 @@
       <div id="vaultProgress" class="note"></div>
     </section>
 
-    <footer>FREE-009 · OPEN PROTOCOL · FREE app ≠ FREE network</footer>
+    <footer>FREE-011 · GENESIS TESTNET · OPEN PROTOCOL · FREE app ≠ FREE network</footer>
   </main>
   <script src="/pq.bundle.js"></script>
   <script src="/app.js"></script>
