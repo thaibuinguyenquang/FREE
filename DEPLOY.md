@@ -1,11 +1,13 @@
-# FREE-006 deployment
+# FREE-009 deployment
 
-The currently live FREE003 Render service can be upgraded directly to FREE-006; FREE-004/005 do not need separate deployments.
+The live FREE-006 Render service can be upgraded directly to FREE-009.
 
-1. Replace the repository root with the FREE-006 files while keeping the same GitHub repository.
-2. Commit to `main`.
+1. Replace the GitHub repository root with the FREE-009 files.
+2. Commit to `main` (suggested message: `FREE007`).
 3. Render will run `npm install` and `npm start` from `render.yaml`.
-4. Visit `/health`. Confirm `version` is `FREE-006` and note `nodeId`.
-5. Keep browser site data during testing so legacy local data is not accidentally cleared.
+4. Open `/health` and confirm `"version":"FREE-009"`.
+5. Open the main FREE URL without clearing browser site data.
+6. The existing FREE-006 PQ identity should be preserved; FREE-009 will ask for display name, PIN and Recovery Kit setup.
+7. Confirm the status changes from `đang xác thực · PQ` to `đã kết nối · PQ`.
 
-For decentralization testing, run a second node on another computer or public host and set its `BOOTSTRAP_PEERS` to the Render URL. For a second public node, also set `PUBLIC_NODE_URL` to its own public HTTPS URL. Once both nodes report federation peers, users connected to different nodes can route signed encrypted traffic across the federation.
+Only after client authentication succeeds should federation Node #2 testing continue.

@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-006';
+const VERSION = 'FREE-009';
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data');
@@ -65,8 +65,63 @@ function securityHeaders(res) {
 const clients = new Map();
 const contactCards = new Map(); // public PQ identity cards only; never private keys
 const storageNodes = new Set();
+// FREE-008 testnet contribution accounting. Credits have NO monetary value.
+// Account identity, node identity and future payment identity are separate namespaces.
+const nodeServices = new Map();
+const SERVICE_CREDIT_PER_MIB = Number(process.env.SERVICE_CREDIT_PER_MIB || 1);
 
-// FREE-006 federation foundation. Nodes are untrusted transports: user payloads remain
+// FREE-009 deterministic testnet economic policy.
+// This is an accounting simulator, NOT a transferable or monetary token.
+// Founder reward is a transparent share of NEW epoch emission only; it never debits users.
+const ECON_POLICY = Object.freeze({
+  id: 'FREE-ECON-1',
+  version: 1,
+  epochSeconds: Math.max(60, Number(process.env.ECON_EPOCH_SECONDS || 86400)),
+  annualInflationRate: Math.max(0, Math.min(1, Number(process.env.ECON_ANNUAL_INFLATION || 0.05))),
+  founderShare: Math.max(0, Math.min(1, Number(process.env.ECON_FOUNDER_SHARE || 0.10))),
+  nodeShare: Math.max(0, Math.min(1, Number(process.env.ECON_NODE_SHARE || 0.65))),
+  ecosystemShare: Math.max(0, Math.min(1, Number(process.env.ECON_ECOSYSTEM_SHARE || 0.15))),
+  treasuryShare: Math.max(0, Math.min(1, Number(process.env.ECON_TREASURY_SHARE || 0.10))),
+  genesisSupply: Math.max(0, Number(process.env.ECON_GENESIS_SUPPLY || 1000000000)),
+  activationDelaySeconds: Math.max(0, Number(process.env.ECON_POLICY_TIMELOCK_SECONDS || 172800))
+});
+function assertEconomicPolicy(){
+  const total=ECON_POLICY.founderShare+ECON_POLICY.nodeShare+ECON_POLICY.ecosystemShare+ECON_POLICY.treasuryShare;
+  if(Math.abs(total-1)>1e-9) throw new Error(`economic allocation must equal 1.0; got ${total}`);
+}
+assertEconomicPolicy();
+const ECON_STATE_FILE=path.join(DATA_DIR,'economy-state.json');
+let econState;
+try { econState=JSON.parse(fs.readFileSync(ECON_STATE_FILE,'utf8')); } catch {
+  econState={policyId:ECON_POLICY.id,epoch:0,lastEpochAt:Date.now(),supply:ECON_POLICY.genesisSupply,founderAccrued:0,nodePoolAccrued:0,ecosystemAccrued:0,treasuryAccrued:0,totalEmission:0};
+}
+function saveEconomy(){ try{atomicWriteJson(ECON_STATE_FILE,econState)}catch(err){console.error('economy persistence error:',err.message)} }
+function emissionForPeriod(supply,seconds){ return supply*ECON_POLICY.annualInflationRate*(seconds/(365.2425*24*60*60)); }
+function settleEconomicEpochs(){
+  const now=Date.now(), epochMs=ECON_POLICY.epochSeconds*1000;
+  let guard=0;
+  while(now-econState.lastEpochAt>=epochMs && guard++<10000){
+    const emission=emissionForPeriod(econState.supply,ECON_POLICY.epochSeconds);
+    econState.supply+=emission; econState.totalEmission+=emission; econState.epoch++;
+    econState.founderAccrued+=emission*ECON_POLICY.founderShare;
+    econState.nodePoolAccrued+=emission*ECON_POLICY.nodeShare;
+    econState.ecosystemAccrued+=emission*ECON_POLICY.ecosystemShare;
+    econState.treasuryAccrued+=emission*ECON_POLICY.treasuryShare;
+    econState.lastEpochAt+=epochMs;
+  }
+  if(guard>1) saveEconomy();
+}
+function publicEconomy(){
+  settleEconomicEpochs();
+  return {mode:'testnet-accounting',monetaryValue:false,transferable:false,policy:ECON_POLICY,epoch:econState.epoch,nextEpochAt:econState.lastEpochAt+ECON_POLICY.epochSeconds*1000,supply:Number(econState.supply.toFixed(6)),totalEmission:Number(econState.totalEmission.toFixed(6)),allocations:{founder:Number(econState.founderAccrued.toFixed(6)),nodes:Number(econState.nodePoolAccrued.toFixed(6)),ecosystem:Number(econState.ecosystemAccrued.toFixed(6)),treasury:Number(econState.treasuryAccrued.toFixed(6))}};
+}
+setInterval(()=>{settleEconomicEpochs();saveEconomy()},Math.min(60000,ECON_POLICY.epochSeconds*1000)).unref();
+function validNodeId(x){ return typeof x==='string' && /^[a-f0-9]{32,128}$/i.test(x); }
+function serviceFor(nodeId, ownerId){ let x=nodeServices.get(nodeId); if(!x){x={nodeId,ownerId,capacityMb:0,storedBytes:0,receipts:0,credits:0,lastSeen:Date.now(),rewardedCids:new Set()};nodeServices.set(nodeId,x)} return x; }
+function publicService(x){return {nodeId:x.nodeId,capacityMb:x.capacityMb,storedBytes:x.storedBytes,receipts:x.receipts,credits:Number(x.credits.toFixed(6)),lastSeen:x.lastSeen};}
+
+
+// FREE-007 federation foundation. Nodes are untrusted transports: user payloads remain
 // end-to-end signed/encrypted. Federation improves availability but does not yet provide
 // metadata anonymity; that is a later protocol layer.
 const NODE_ID_FILE = path.join(DATA_DIR, 'node-identity.json');
@@ -185,7 +240,8 @@ function validId(id){ return typeof id === 'string' && /^[a-f0-9]{16,128}$/i.tes
 function validCid(cid){ return typeof cid === 'string' && /^[a-f0-9]{64}$/i.test(cid); }
 function pqIdentityId(card){return crypto.createHash('sha512').update(`FREE-PQ1:${card.kemPublicKey}:${card.sigPublicKey}`,'utf8').digest('hex').slice(0,64)}
 function fromB64(s){return new Uint8Array(Buffer.from(s,'base64'))}
-async function verifyPqSignature(signature,message,publicKey){try{const {ml_dsa65}=await pqModule;return ml_dsa65.verify(fromB64(signature),Buffer.from(JSON.stringify(message),'utf8'),fromB64(publicKey))}catch{return false}}
+async function verifyPqSignatureBytes(signature,messageBytes,publicKey){try{const {ml_dsa65}=await pqModule;return ml_dsa65.verify(fromB64(signature),messageBytes,fromB64(publicKey))}catch(err){console.warn('PQ verify error:',err?.message||err);return false}}
+async function verifyPqSignature(signature,message,publicKey){return verifyPqSignatureBytes(signature,Buffer.from(JSON.stringify(message),'utf8'),publicKey)}
 function queueFor(to, msg){
   to = to.toLowerCase();
   offlineQueue[to] = offlineQueue[to] || [];
@@ -231,7 +287,7 @@ const server = http.createServer(async (req,res)=>{
     const host=req.headers.host||`localhost:${PORT}`; const url=new URL(req.url,`http://${host}`);
     if(url.pathname==='/health'){
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:clients.size,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0)}));
+      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:clients.size,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,contributingNodes:nodeServices.size}));
     }
     if(url.pathname==='/api/card'){
       const id=(url.searchParams.get('id')||'').toLowerCase();
@@ -240,6 +296,11 @@ const server = http.createServer(async (req,res)=>{
       if(!card) card=await lookupRemoteCard(id);
       if(!card){res.writeHead(404,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({error:'identity not found on connected FREE nodes'}))}
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});return res.end(JSON.stringify(card));
+    }
+    if(url.pathname==='/api/network'){
+      const services=[...nodeServices.values()].map(publicService);
+      res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
+      return res.end(JSON.stringify({version:VERSION,economy:publicEconomy(),serviceAccounting:{name:'FREE Test Credits',monetaryValue:false,storageNodes:storageNodes.size,contributingNodes:services.length,totalStoredBytes:services.reduce((n,x)=>n+x.storedBytes,0),totalCredits:Number(services.reduce((n,x)=>n+x.credits,0).toFixed(6))}}));
     }
     if(url.pathname==='/api/qr'){
       const text=url.searchParams.get('text')||''; if(!text||text.length>4000){res.writeHead(400);return res.end('bad text')}
@@ -286,20 +347,30 @@ server.on('upgrade',(req,socket)=>{
         for(const f of parsed.frames){
           if(f.opcode===0x8){socket.end();return} if(f.opcode===0x9){socket.write(Buffer.from([0x8A,0x00]));continue} if(f.opcode!==0x1||f.payload.length>MAX_FRAME_BYTES)continue;
           let msg;try{msg=JSON.parse(f.payload.toString('utf8'))}catch{continue}
-          if(safeHelloAuth(msg)&&msg.challenge===challenge){
-            const card=msg.card,expected=pqIdentityId(card),signable={type:'hello-auth',id:msg.id,challenge:msg.challenge,card};
-            if(expected!==msg.id.toLowerCase() || !(await verifyPqSignature(msg.signature,signable,card.sigPublicKey))) { wsSend(socket,{type:'auth-error'}); socket.destroy(); return; }
+          if(msg?.type==='hello-auth'){
+            if(!safeHelloAuth(msg)){wsSend(socket,{type:'auth-error',reason:'invalid-auth-shape'});continue}
+            if(msg.challenge!==challenge){wsSend(socket,{type:'auth-error',reason:'challenge-mismatch'});continue}
+            const card=msg.card,expected=pqIdentityId(card),authBytes=Buffer.from(`FREE-AUTH-1:${msg.id}:${msg.challenge}`,'utf8');
+            if(expected!==msg.id.toLowerCase()){wsSend(socket,{type:'auth-error',reason:'identity-card-mismatch'});continue}
+            if(!(await verifyPqSignatureBytes(msg.signature,authBytes,card.sigPublicKey))){wsSend(socket,{type:'auth-error',reason:'signature-invalid'});continue}
             id=msg.id.toLowerCase();const prior=clients.get(id);if(prior&&prior!==socket&&!prior.destroyed)prior.destroy();clients.set(id,socket);contactCards.set(id,card);announcePresence(id,true);wsSend(socket,{type:'hello-ok',id,serverTime:Date.now(),version:VERSION});const queued=offlineQueue[id]||[];delete offlineQueue[id];saveQueue();for(const q of queued)wsSend(socket,q);continue;
           }
           if(!id)continue;
-          if(msg.type==='storage-advertise'){if(msg.enabled)storageNodes.add(id);else storageNodes.delete(id);wsSend(socket,{type:'storage-status',enabled:storageNodes.has(id),available:storageNodes.size});continue}
+          if(msg.type==='storage-advertise'){
+            if(msg.enabled){storageNodes.add(id);if(validNodeId(msg.nodeId)){const svc=serviceFor(msg.nodeId,id);svc.capacityMb=Math.max(0,Math.min(102400,Number(msg.capacityMb)||0));svc.lastSeen=Date.now();socket.freeNodeServiceId=msg.nodeId;}}
+            else {storageNodes.delete(id);}
+            const svc=socket.freeNodeServiceId?nodeServices.get(socket.freeNodeServiceId):null;
+            wsSend(socket,{type:'storage-status',enabled:storageNodes.has(id),available:storageNodes.size,service:svc?publicService(svc):null});continue}
           if(msg.type==='storage-peers'){const peers=[...storageNodes].filter(x=>x!==id && clients.has(x)).slice(0,20);wsSend(socket,{type:'storage-peers',requestId:msg.requestId,peers});continue}
           if(safeEnvelope(msg)&&msg.from.toLowerCase()===id){const online=route(msg.to,msg,{queue:true});wsSend(socket,{type:'ack',msgId:msg.payload.msgId,queued:!online});continue}
           if(safeContactCard(msg)&&msg.from.toLowerCase()===id){route(msg.to,msg,{queue:true});continue}
           if(safeVaultStore(msg)&&msg.from.toLowerCase()===id){const online=route(msg.to,msg,{queue:false});wsSend(socket,{type:'vault-route-ack',cid:msg.cid,to:msg.to,online});continue}
           if(safeVaultFetch(msg)&&msg.from.toLowerCase()===id){route(msg.to,msg,{queue:false});continue}
           if(safeVaultResponse(msg)&&msg.from.toLowerCase()===id){route(msg.to,msg,{queue:false});continue}
-          if(msg.type==='vault-store-ack'&&validId(msg.to)&&validId(msg.from)&&msg.from.toLowerCase()===id&&validCid(msg.cid)){route(msg.to,msg,{queue:false});continue}
+          if(msg.type==='vault-store-ack'&&validId(msg.to)&&validId(msg.from)&&msg.from.toLowerCase()===id&&validCid(msg.cid)){
+            const sid=socket.freeNodeServiceId,svc=sid&&nodeServices.get(sid);
+            if(svc&&!svc.rewardedCids.has(msg.cid)){svc.rewardedCids.add(msg.cid);const bytes=Math.max(1,Math.min(700000,Number(msg.bytes)||1));svc.storedBytes+=bytes;svc.receipts++;svc.credits+=(bytes/1048576)*SERVICE_CREDIT_PER_MIB;svc.lastSeen=Date.now();wsSend(socket,{type:'service-credit',service:publicService(svc),reason:'encrypted-storage-receipt'});}
+            route(msg.to,msg,{queue:false});continue}
           if(msg.type==='delivery'&&validId(msg.to)&&validId(msg.from)&&msg.from.toLowerCase()===id&&typeof msg.msgId==='string'){route(msg.to,msg,{queue:true});continue}
         }
       }catch(err){console.warn('ws closed:',err.message);socket.destroy()}

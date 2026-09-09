@@ -1,87 +1,88 @@
-# FREE-006 — Post-Quantum Federated Node Foundation
+# FREE-009 — Secure Identity & Recovery UX
 
-FREE is an experimental pseudonymous E2EE communication protocol. **FREE app ≠ FREE network.** FREE-006 continues directly from the FREE-004/005 post-quantum foundation and begins removing the single-relay assumption.
+FREE is an experimental pseudonymous, post-quantum-native E2EE communication protocol. **FREE app ≠ FREE network.** FREE-009 continues directly from FREE-006 and keeps the federated node foundation while fixing the PQ client authentication flow and adding a user-facing account/recovery experience.
 
-## What changed in FREE-006
+## What changed in FREE-009
 
-FREE-006 introduces a standalone `FREE node` mode. The same `server.js` can be run by FREE Inc., a community member, a company, or directly on a user's own computer. Nodes can connect to multiple bootstrap peers and then gossip additional public node URLs. A browser client talks to any FREE node it trusts as a transport endpoint; encrypted/signed user messages can be routed across connected FREE nodes.
+- Fixes the browser ↔ FREE node PQ challenge-response flow by signing a canonical `FREE-AUTH-1:<id>:<challenge>` payload with ML-DSA-65. The node recomputes the self-certifying account ID from the published ML-KEM/ML-DSA public keys and verifies the signature before accepting the socket.
+- One FREE account keeps one PQ Account Identity. Devices are not separate user identities.
+- First-run onboarding now offers **Create FREE ID** or **Restore FREE ID**.
+- Adds a user-set display name. Display name can change without changing the cryptographic FREE ID.
+- Adds a personal 4–6 digit PIN for account recovery.
+- Adds an Account Recovery Kit. Restoring on another device requires both the Recovery Kit and the PIN.
+- Adds Recovery Kit refresh, export/copy, and PIN change. Changing the PIN produces a new Recovery Kit while preserving the same FREE Account Identity.
+- Adds Vietnamese and English UI; Vietnamese is selected automatically for Vietnamese browser locales and can be switched manually.
+- Keeps Short FREE ID for human sharing, Full cryptographic ID for verification, QR/link invites, PQ E2EE messaging, encrypted distributed-vault experiment, and FREE-006 node federation.
 
-Render is therefore no longer a protocol requirement. It can remain one convenient bootstrap/test node while the network grows. If one node disappears, users attached to other connected nodes can continue routing through the remaining federation.
+## Security model
 
-### Federation transport
+Active public-key security path remains `FREE-PQ1`:
 
-Each FREE node:
+- ML-KEM-768 — key establishment
+- ML-DSA-65 — identity signatures and node authentication
+- HKDF-SHA-512 — message-key derivation
+- AES-256-GCM — symmetric authenticated encryption
 
-- has a locally generated persistent random Node ID;
-- accepts browser clients on `/ws`;
-- accepts node-to-node federation on `/federation`;
-- advertises locally connected pseudonymous FREE IDs to peers;
-- routes signed encrypted envelopes to a peer that currently advertises the recipient;
-- falls back to bounded federation flooding when no direct route is known;
-- can fetch a public PQ Identity Card from connected peers;
-- gossips known node URLs so bootstrap peers are not the only peers forever.
+FREE-009 does not reintroduce RSA, ECDH, ECDSA, or a classical fallback into the active identity/message path.
 
-Nodes are deliberately treated as **untrusted transport**. User messages remain FREE-PQ1 encrypted and ML-DSA signed end-to-end. A federation node does not receive private identity keys or plaintext message content.
+Private account keys remain in the user's encrypted/local recovery material and browser storage. FREE nodes receive public identity cards and ciphertext, never the account private key or PIN.
 
-## Important privacy limit
+## Account Recovery Kit
 
-FREE-006 improves decentralization/availability, but **federation is not yet metadata anonymity**. Nodes may still observe pseudonymous routing IDs, connection timing, IP addresses and traffic sizes. Presence gossip is a practical discovery mechanism for this prototype and is explicitly not the final private-discovery design.
+The Account Recovery Kit is an encrypted snapshot of the FREE account state. The kit contains high-entropy recovery material and ciphertext; the user PIN is combined with that recovery material through a KDF before the snapshot can be decrypted.
 
-Future privacy layers should replace this with privacy-preserving mailbox/discovery, rotating routing identifiers, packet padding, multi-hop routing/mix strategies and stronger traffic-analysis defenses.
-
-## FREE-PQ1 stays unchanged
-
-- ML-DSA-65 identity/signatures (NIST FIPS 204)
-- ML-KEM-768 key encapsulation (NIST FIPS 203)
-- AES-256-GCM content encryption
-- HKDF-SHA-512 message-key derivation
-- SHA-512-derived 256-bit Full FREE ID
-- no ECDH/ECDSA/RSA on the active public-key security path
-
-FREE-006 does not reintroduce hybrid classical cryptography.
-
-## Account identity model
-
-FREE uses **one cryptographic Account Identity per FREE account**. A phone, PC or tablet is not a separate FREE identity. Future multi-device support will authorize devices under the same Account Identity; device/session keys are authorization tools, not replacement identities.
-
-## Running your own FREE node
-
-Requirements: Node.js 22 LTS recommended.
-
-### Windows easiest path
-
-1. Extract the ZIP.
-2. Double-click `start-free-node.bat`.
-3. On first run it performs `npm install` and builds the browser PQ bundle.
-4. Open `http://localhost:3000` in Chrome.
-
-That node works without Render for the local computer. Other machines on the same LAN can use `http://YOUR-PC-LAN-IP:3000` while your firewall permits the port.
-
-### Join other FREE nodes
-
-Set environment variables before `npm start`:
+The intended user model is simple:
 
 ```text
-PUBLIC_NODE_URL=https://the-public-url-of-this-node.example
-BOOTSTRAP_PEERS=https://node-a.example,https://node-b.example
+Recovery Kit + Personal PIN -> restore the same FREE Account Identity
 ```
 
-`PUBLIC_NODE_URL` is optional for a private/local-only node. `BOOTSTRAP_PEERS` can contain several nodes. No single bootstrap URL is authoritative.
+Important prototype limitation: the agreed 5–20 failed-attempt policy is **not yet rollback-resistant at network level**. A purely local counter can be reset by a hostile client, so FREE-009 does not claim that this requirement is cryptographically enforced yet. Do not market the prototype as having irreversible attempt-count enforcement.
 
-For a home node to accept connections from the public Internet without a hosting provider, the operator generally needs a public/reachable IP, router port forwarding and TLS/reverse-proxy setup. A local node behind NAT can still be useful locally and can make outbound federation connections, but inbound public reachability requires network configuration outside FREE itself.
+The Recovery Kit should be regenerated after important account-data changes if the user wants the exported snapshot to include the latest contacts/chat state. The distributed-vault system remains a separate experimental storage path.
 
-## Updating the existing FREE003 Render deployment
+## Identity model
 
-The repository can jump directly from the currently deployed FREE003 code to FREE-006. FREE-004 and FREE-005 do not need to be deployed first. Push the contents of this ZIP over the repository root and let Render redeploy. `/health` should then report `"version":"FREE-006"` plus `nodeId`, `federationPeers` and `knownPeers`.
+```text
+FREE Account
+    |
+    +-- one PQ Account Identity
+    +-- one Short FREE ID
+    +-- one Full cryptographic ID
+    +-- display name (changeable)
+    +-- authorized devices (future complete protocol)
+```
 
-Keep the existing Render service as the first bootstrap/test node while validating FREE-006. Once multiple independent public nodes exist, Render can be removed without changing the protocol.
+A phone, PC, or tablet is not a new user identity. Future device authorization will authorize devices under the same Account Identity.
 
-## What FREE-006 is NOT
+## Federation
 
-- It is not a blockchain and does not store messages/photos on-chain.
-- It is not yet a DHT.
-- It is not yet a Tor/mixnet-style anonymity network.
-- It does not yet guarantee private social-graph discovery.
-- It is not production-secure or independently audited.
+FREE-009 retains the FREE-006 `/federation` node layer. Render may remain the first bootstrap/test node, but the network design does not require Render to be the permanent owner of the protocol. Federation improves availability and decentralization; it does **not yet provide metadata anonymity**.
 
-The point of FREE-006 is to move from **one hosted relay** toward **many replaceable FREE nodes** while preserving the FREE-PQ1 end-to-end security model.
+## Deploy from the currently live FREE-006
+
+Replace the repository root with the contents of this ZIP and commit to `main`. Render will run `npm install`, build `public/pq.bundle.js`, and start the service. `/health` should report `"version":"FREE-009"`.
+
+Do not clear browser site data before testing. The browser that already created the FREE-006 PQ identity will keep that same identity and FREE-009 will ask only for the missing display name/PIN/Recovery setup.
+
+## Prototype status
+
+FREE-009 is not production-secure. Required future work includes an audited forward-secret/post-compromise-secure PQ messaging session protocol, rollback-resistant recovery-attempt enforcement and crypto-erasure, complete multi-device authorization/revocation, metadata-private discovery/routing, attachment encryption/lifecycle, abuse controls, durable decentralized storage, and independent cryptographic/security review.
+
+
+## FREE-009 ecosystem foundation
+- Voluntary node contribution with a separate local Node Identity and configurable storage capacity.
+- FREE Test Credits (no monetary value, non-transferable) based on encrypted-storage receipts for testnet measurement.
+- Account Identity != Node Identity != future Payment Identity.
+- `/api/network` exposes aggregate testnet service metrics only.
+- This is NOT a real token launch and the receipt model is NOT Sybil-resistant yet.
+- Real-token prerequisites: verifiable useful-service challenges, replication/repair, anti-Sybil, privacy-preserving accounting, security audits and legal review.
+
+
+## FREE-009 deterministic economic authority foundation
+
+FREE-009 adds a **testnet accounting model** for periodic token inflation and automatic founder/developer allocation. It does not create a transferable or monetary token. The default simulation uses a 5% annual inflation rate, daily epochs, and allocates each epoch's **new emission** as 10% founder/developer, 65% node pool, 15% ecosystem and 10% treasury. These are development defaults, not final tokenomics.
+
+Founder reward is calculated only from newly emitted units and never debits or rewrites user balances. Economic accounting is persisted separately in `data/economy-state.json`; it has no access path to user private keys, PINs, Recovery Kits, plaintext messages or vault decryption. `/api/network` exposes the active public policy and aggregate accounting for inspection.
+
+The production design requires signed/versioned Economic Policy Manifests, separate post-quantum Economic/Upgrade/Emergency/Treasury authorities, activation timelocks, bounded emergency controls, validator/consensus rules, service-proof anti-Sybil logic, audits and legal review before any real transferable token.
