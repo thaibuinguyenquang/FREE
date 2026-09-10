@@ -1,4 +1,4 @@
-# FREE-029 — Private Alpha Messenger
+# FREE-030 — Private Alpha Messenger
 
 FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-023 advances the usable post-quantum messenger while preserving **FREE Chain Freedom Economy Testnet-2** while preserving the FREE-PQ1 communication path and the rule that user secrets never belong to the chain or founder.
 
@@ -105,10 +105,14 @@ FREE-027 hardens account-vault continuity after live multi-browser testing. A de
 Desktop Compact Recovery now accepts Enter from Recovery Address, Recovery Secret, or PIN; clicking the Restore button is no longer required. Onboarding, restore completion and in-app view changes use short native transitions while respecting reduced-motion preferences.
 
 
-## FREE-029 — Distributed Storage v1
-FREE-029 begins moving long-term message history out of the device-as-archive model. Each message is re-encrypted on-device under an account-owned archive key derived from the PQ account secret material, stored as a content-addressed ciphertext chunk, and indexed by an account manifest. The current relay can act as a professional testnet storage gateway; it never receives archive plaintext or the archive key. After a positive storage receipt, the browser may bound each conversation cache to the most recent 250 messages. On a restored device, FREE requests the archive manifest and hydrates the most recent 500 archived messages, merging by message ID.
+## FREE-030 — Distributed Storage v1
+FREE-030 begins moving long-term message history out of the device-as-archive model. Each message is re-encrypted on-device under an account-owned archive key derived from the PQ account secret material, stored as a content-addressed ciphertext chunk, and indexed by an account manifest. The current relay can act as a professional testnet storage gateway; it never receives archive plaintext or the archive key. After a positive storage receipt, the browser may bound each conversation cache to the most recent 250 messages. On a restored device, FREE requests the archive manifest and hydrates the most recent 500 archived messages, merging by message ID.
 
 This is a **testnet storage implementation**, not production Proof of Useful Service. The content-addressed receipt proves that the gateway accepted a specific ciphertext chunk. Independent challenge sampling, replication/erasure repair, anti-Sybil accounting, validator settlement and slashing are still roadmap work. Messages, media and archive ciphertext are not placed on FREE Chain.
 
-## FREE-029 — Archive write reliability
-FREE-029 moves encrypted archive writes to a signed same-origin HTTP endpoint so archival no longer depends on WebSocket request/response timing. Every stored chunk is still encrypted on-device, content-addressed by SHA-256 CID, and authorized by an ML-DSA-65 Account Identity signature. The client retries unsaved messages on later state changes and immediately schedules an archive sweep after PQ authentication. `/health` exposes `encryptedArchive.chunks` and `bytes` as an observable testnet signal.
+## FREE-030 — Archive write reliability
+FREE-030 moves encrypted archive writes to a signed same-origin HTTP endpoint so archival no longer depends on WebSocket request/response timing. Every stored chunk is still encrypted on-device, content-addressed by SHA-256 CID, and authorized by an ML-DSA-65 Account Identity signature. The client retries unsaved messages on later state changes and immediately schedules an archive sweep after PQ authentication. `/health` exposes `encryptedArchive.chunks` and `bytes` as an observable testnet signal.
+
+
+## FREE-030 archive key correction
+FREE-030 fixes the encrypted archive ingress root cause found in FREE-029: SHA-512 produces 64 bytes, while AES-256-GCM requires a 32-byte raw key. The archive KDF now domain-separates the account signing secret, hashes with SHA-512, and uses the first 32 bytes as the AES-256 key. This allows archive encryption to complete and the authenticated HTTP archive upload to execute.

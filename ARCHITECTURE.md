@@ -44,7 +44,7 @@ A recipient must not silently drop a valid encrypted envelope solely because a r
 The Messenger shell is also constrained to the dynamic viewport (`100dvh`) with nested `min-height:0` scroll containers, keeping the composer visible at normal browser zoom.
 
 
-## FREE-029 Distributed Storage v1
+## FREE-030 Distributed Storage v1
 Device storage is now treated as a bounded cache rather than the canonical long-term archive. The client encrypts each message again for archival storage using an account-owned AES-256-GCM archive key derived locally from PQ account secret material. The ciphertext is addressed by SHA-256 CID and uploaded over the authenticated PQ WebSocket session. The storage gateway verifies CID integrity and an ML-DSA-65 account signature before accepting the chunk. Per-account manifests map message IDs to ciphertext CIDs.
 
 The current Render relay is one professional testnet gateway. The wire contract is intentionally node-oriented so later independent storage nodes can implement the same put/get/receipt flow. FREE Chain does not store message chunks. Future PoUS must add randomized possession/retrieval challenges, replication diversity, repair, anti-Sybil controls and chain settlement before rewards can be called production-grade.

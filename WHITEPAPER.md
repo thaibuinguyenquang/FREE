@@ -1,6 +1,6 @@
 # FREE White Paper
 
-**Living document — updated through FREE-029 Private Alpha**
+**Living document — updated through FREE-030 Private Alpha**
 
 ## Abstract
 FREE is a post-quantum-native private communication protocol, decentralized node network, distributed encrypted-storage system and native economic network. The FREE application is the first client, not the owner of the network. Users own their cryptographic identities, keys and data. Network operators may contribute useful resources and receive protocol rewards. Economic and upgrade authority can evolve the network without granting any authority over user plaintext or private keys.
@@ -169,16 +169,20 @@ Desktop Recovery also supports keyboard-first completion: Enter submits the rest
 **Historical limitation.** Encryption cannot recreate plaintext that disappeared before any surviving device, account vault, recovery capsule or queued encrypted envelope retained it. FREE therefore distinguishes continuity guarantees for newly synchronized state from recovery of already-lost pre-sync history.
 
 
-## 22. FREE-029 — Device cache and Distributed Storage v1
+## 22. FREE-030 — Device cache and Distributed Storage v1
 
-**IMPLEMENTED / TESTNET.** FREE-029 changes the storage direction from “every device is the archive” to “device is a bounded cache; the FREE Storage Network is the encrypted archive.” Each chat message is independently serialized and encrypted on the user device under an account-owned archive key. The resulting ciphertext is content-addressed by CID. The testnet storage gateway accepts a chunk only after CID integrity verification and an ML-DSA-65 signature from the authenticated Account Identity. The gateway stores ciphertext and a per-account manifest; it does not receive the archive key or message plaintext.
+**IMPLEMENTED / TESTNET.** FREE-030 changes the storage direction from “every device is the archive” to “device is a bounded cache; the FREE Storage Network is the encrypted archive.” Each chat message is independently serialized and encrypted on the user device under an account-owned archive key. The resulting ciphertext is content-addressed by CID. The testnet storage gateway accepts a chunk only after CID integrity verification and an ML-DSA-65 signature from the authenticated Account Identity. The gateway stores ciphertext and a per-account manifest; it does not receive the archive key or message plaintext.
 
 After a positive storage receipt, the browser may retain only the newest 250 messages per conversation locally. A restored device requests the archive manifest and can hydrate recent encrypted history, merging by stable message ID. This separates endpoint convenience from long-term storage responsibility and creates a concrete useful service that storage operators can provide.
 
-**PoUS boundary.** FREE-029 receipts are evidence of accepted content-addressed ciphertext, not yet a production Proof of Useful Service. A production design still requires randomized possession/retrieval challenges, replication or erasure-coded diversity, repair, anti-Sybil controls, service-quality scoring and settlement into FREE Chain. Only proofs/rewards/policy belong on chain; message ciphertext, media ciphertext, Recovery Secrets and private keys do not.
+**PoUS boundary.** FREE-030 receipts are evidence of accepted content-addressed ciphertext, not yet a production Proof of Useful Service. A production design still requires randomized possession/retrieval challenges, replication or erasure-coded diversity, repair, anti-Sybil controls, service-quality scoring and settlement into FREE Chain. Only proofs/rewards/policy belong on chain; message ciphertext, media ciphertext, Recovery Secrets and private keys do not.
 
 **Persistence boundary.** The current hosted relay is a professional testnet gateway. Its `DATA_DIR` must use persistent storage for archive durability across redeploys. The protocol is designed to expand to independent storage nodes; a single hosted gateway is not decentralized storage.
 
-## 23. FREE-029 — Reliable encrypted archive ingress
+## 23. FREE-030 — Reliable encrypted archive ingress
 
-**IMPLEMENTED / TESTNET.** FREE-029 separates realtime messaging transport from archival persistence. Message delivery continues over authenticated PQ WebSockets, while long-term encrypted archive chunks are uploaded through a signed same-origin HTTP ingress. The server verifies the self-certifying Account Identity card, ML-DSA-65 signature, ciphertext CID and byte length before accepting the chunk. This prevents a transient WebSocket acknowledgement race from silently skipping archive persistence. The archive remains ciphertext-only and is not stored on FREE Chain.
+**IMPLEMENTED / TESTNET.** FREE-030 separates realtime messaging transport from archival persistence. Message delivery continues over authenticated PQ WebSockets, while long-term encrypted archive chunks are uploaded through a signed same-origin HTTP ingress. The server verifies the self-certifying Account Identity card, ML-DSA-65 signature, ciphertext CID and byte length before accepting the chunk. This prevents a transient WebSocket acknowledgement race from silently skipping archive persistence. The archive remains ciphertext-only and is not stored on FREE Chain.
+
+
+### FREE-030 implementation note
+The encrypted message archive derives an AES-256-GCM archive key from domain-separated account key material. SHA-512 output is explicitly reduced to 256 bits before WebCrypto AES import. Ciphertext remains off-chain; FREE Chain is reserved for proofs, accounting, rewards and protocol state.
