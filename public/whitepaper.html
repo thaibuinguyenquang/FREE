@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="description" content="FREE Protocol Whitepaper — post-quantum identity, messaging, network, chain and economics." />
+  <title>FREE Protocol · Whitepaper</title>
+  <link rel="stylesheet" href="/whitepaper.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="FREE Messenger">F R E E</a>
+    <nav class="topnav" aria-label="Primary">
+      <a href="/">Messenger</a>
+      <a class="active" href="/whitepaper">Whitepaper</a>
+      <a href="/api/chain" target="_blank" rel="noopener">Chain API</a>
+    </nav>
+    <div class="top-actions">
+      <button id="copyMarkdown" class="ghost" type="button">Copy Markdown</button>
+      <button id="mobileTocToggle" class="ghost mobile-only" type="button" aria-expanded="false">Contents</button>
+    </div>
+  </header>
+
+  <div id="progress" class="reading-progress" aria-hidden="true"></div>
+
+  <main class="shell">
+    <aside id="leftRail" class="left-rail">
+      <div class="rail-title">WHITEPAPER</div>
+      <nav id="toc" class="toc" aria-label="Whitepaper contents"></nav>
+      <div class="rail-meta">
+        <span>Living document</span>
+        <span id="versionMeta">FREE-024</span>
+      </div>
+    </aside>
+
+    <article class="paper-wrap">
+      <section class="hero">
+        <div class="eyebrow">FREE PROTOCOL · LIVING WHITEPAPER</div>
+        <h1>Freedom by architecture,<br/>not by permission.</h1>
+        <p class="lede">A post-quantum communication protocol where users keep their identity, keys and data — while an open network coordinates messaging, storage and economics.</p>
+        <div class="status-grid" aria-label="Current implementation status">
+          <div><span class="status implemented">IMPLEMENTED</span><strong>PQ identity & messaging</strong><small>Private-alpha browser path</small></div>
+          <div><span class="status testnet">TESTNET</span><strong>FREE Chain</strong><small>Single producer, PQ-signed blocks</small></div>
+          <div><span class="status testnet">TESTNET</span><strong>Compact Recovery</strong><small>Address + Secret + PIN</small></div>
+          <div><span class="status roadmap">ROADMAP</span><strong>Decentralized consensus</strong><small>Multi-validator finality</small></div>
+        </div>
+        <div class="hero-note">FREE app ≠ FREE network. The client should be replaceable without taking the user's identity away.</div>
+      </section>
+
+      <div id="paper" class="paper" aria-live="polite">
+        <div class="loading">Loading the living Whitepaper…</div>
+      </div>
+    </article>
+
+    <aside class="right-rail">
+      <div class="rail-title">ON THIS PAGE</div>
+      <nav id="pageToc" class="page-toc" aria-label="On this page"></nav>
+      <div class="legend">
+        <div><span class="dot implemented"></span>Implemented</div>
+        <div><span class="dot testnet"></span>Testnet</div>
+        <div><span class="dot spec"></span>Specification</div>
+        <div><span class="dot roadmap"></span>Roadmap</div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="site-footer">
+    <span>FREE-024 · TESTNET</span>
+    <span>Your identity. Your keys. Your data.</span>
+  </footer>
+  <script src="/whitepaper.js" defer></script>
+</body>
+</html>

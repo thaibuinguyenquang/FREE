@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-020';
+const VERSION = 'FREE-024';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -79,7 +79,17 @@ function securityHeaders(res) {
   res.setHeader('X-Frame-Options','DENY');
 }
 
-const clients = new Map();
+const clients = new Map(); // account id -> Map(deviceId -> socket)
+const DEVICE_FILE = path.join(DATA_DIR,'devices.json');
+let deviceRegistry = {};
+try { deviceRegistry = JSON.parse(fs.readFileSync(DEVICE_FILE,'utf8')); } catch { deviceRegistry = {}; }
+function saveDevices(){ try{ atomicWriteJson(DEVICE_FILE,deviceRegistry); }catch(err){ console.error('device persistence error:',err.message); } }
+function validDeviceId(x){ return typeof x==='string' && /^DEV-[A-F0-9]{20}$/.test(x); }
+function accountSockets(id){ return clients.get(String(id||'').toLowerCase()) || new Map(); }
+function accountOnline(id){ const m=accountSockets(id); return [...m.values()].some(socketOpen); }
+function connectedSocketCount(){ let n=0; for(const m of clients.values()) for(const ws of m.values()) if(socketOpen(ws)) n++; return n; }
+function publicDevices(id,current=''){ const reg=deviceRegistry[id]||{}; return Object.entries(reg).map(([deviceId,d])=>({deviceId,authorizedAt:d.authorizedAt||0,lastSeen:d.lastSeen||0,revokedAt:d.revokedAt||0,current:deviceId===current,online:socketOpen(accountSockets(id).get(deviceId))})).sort((a,b)=>(b.current-a.current)||(b.lastSeen-a.lastSeen)); }
+function broadcastDeviceList(id){ for(const [did,ws] of accountSockets(id)) wsSend(ws,{type:'device-list',devices:publicDevices(id,did)}); }
 const CARD_FILE = path.join(DATA_DIR,'public-cards.json');
 const contactCards = new Map(); // public PQ identity cards only; never private keys
 try{const saved=JSON.parse(fs.readFileSync(CARD_FILE,'utf8'));for(const [id,card] of Object.entries(saved||{}))contactCards.set(id,card)}catch{}
@@ -160,7 +170,7 @@ async function initNodeIdentity(){
   nodeIdentity={v:2,suite:'ML-DSA-65',nodeId,publicKey,secretKey,createdAt:Date.now()};NODE_ID=nodeId;
   atomicWriteJson(NODE_ID_FILE,nodeIdentity);try{fs.chmodSync(NODE_ID_FILE,0o600)}catch{}
 }
-function nodeHelloUnsigned(){return {type:'node-hello',nodeId:NODE_ID,version:VERSION,publicUrl:PUBLIC_NODE_URL,users:[...clients.keys()],suite:'ML-DSA-65',publicKey:nodeIdentity?.publicKey||''}}
+function nodeHelloUnsigned(){return {type:'node-hello',nodeId:NODE_ID,version:VERSION,publicUrl:PUBLIC_NODE_URL,users:[...clients.keys()].filter(accountOnline),suite:'ML-DSA-65',publicKey:nodeIdentity?.publicKey||''}}
 function nodeHelloBytes(x){const users=Array.isArray(x.users)?[...x.users].map(String).sort().join(','):'';return Buffer.from(`FREE-NODE-HELLO-1:${x.nodeId}:${x.version}:${x.publicUrl}:${x.publicKey}:${users}`,'utf8')}
 async function signedNodeHello(){const x=nodeHelloUnsigned();const bytes=nodeHelloBytes(x);const {ml_dsa65}=await pqModule;x.signature=Buffer.from(ml_dsa65.sign(bytes,Buffer.from(nodeIdentity.secretKey,'base64'))).toString('base64');return x}
 async function verifyNodeHello(x){try{if(x?.suite!=='ML-DSA-65'||!x.publicKey||!x.signature)return false;const pk=Buffer.from(x.publicKey,'base64');const expected=crypto.createHash('sha512').update('FREE-NODE-PQ1:').update(pk).digest('hex').slice(0,40);if(expected!==x.nodeId)return false;const bytes=nodeHelloBytes(x);const {ml_dsa65}=await pqModule;return ml_dsa65.verify(Buffer.from(x.signature,'base64'),bytes,pk)}catch{return false}}
@@ -236,7 +246,7 @@ async function handlePeerMessage(ws, raw) {
   if(msg.type==='peer-list'&&Array.isArray(msg.peers)){for(const u of msg.peers.slice(0,64)){if(typeof u==='string'&&u&&u!==PUBLIC_NODE_URL)knownPeerUrls.add(u)};schedulePeerConnections();return}
   if(msg.type==='federated-route'&&typeof msg.routeId==='string'&&validId(msg.to)&&msg.msg){
     if(seenFederatedRoutes.has(msg.routeId))return; seenFederatedRoutes.set(msg.routeId,Date.now());
-    const local=clients.get(msg.to.toLowerCase()); if(socketOpen(local)){wsSend(local,msg.msg);return}
+    const local=accountSockets(msg.to); if([...local.values()].some(socketOpen)){for(const ws of local.values())wsSend(ws,msg.msg);return}
     if(Number(msg.ttl)>0) broadcastPeers({...msg,ttl:Number(msg.ttl)-1},peerId); return;
   }
   if(msg.type==='card-request'&&typeof msg.requestId==='string'&&validId(msg.id)){
@@ -285,8 +295,9 @@ function queueFor(to, msg){
 }
 function route(to,msg,{queue=true}={}){
   if(!validId(to)) return false;
-  const target=clients.get(to.toLowerCase());
-  if(socketOpen(target)){ wsSend(target,msg); return true; }
+  const target=accountSockets(to);
+  let delivered=false; for(const ws of target.values()){ if(socketOpen(ws)){wsSend(ws,msg);delivered=true;} }
+  if(delivered) return true;
   if(routeFederated(to,msg)) return true;
   if(queue) queueFor(to,msg);
   return false;
@@ -306,7 +317,7 @@ function safePublishCard(x){
 }
 function safeHelloAuth(x){
   const c=x?.card;
-  return x && x.type==='hello-auth' && typeof x.challenge==='string' && x.challenge.length<256 && validId(x.id) && c && c.id===x.id && c.v===2 && c.cryptoSuite==='FREE-PQ1' && c.kem==='ML-KEM-768' && c.signature==='ML-DSA-65' && typeof c.kemPublicKey==='string' && c.kemPublicKey.length<4000 && typeof c.sigPublicKey==='string' && c.sigPublicKey.length<5000 && typeof x.signature==='string' && x.signature.length<12000;
+  return x && x.type==='hello-auth' && validDeviceId(x.deviceId) && typeof x.challenge==='string' && x.challenge.length<256 && validId(x.id) && c && c.id===x.id && c.v===2 && c.cryptoSuite==='FREE-PQ1' && c.kem==='ML-KEM-768' && c.signature==='ML-DSA-65' && typeof c.kemPublicKey==='string' && c.kemPublicKey.length<4000 && typeof c.sigPublicKey==='string' && c.sigPublicKey.length<5000 && typeof x.signature==='string' && x.signature.length<12000;
 }
 function safeVaultStore(x){ return x && x.type==='vault-store' && validId(x.to) && validId(x.from) && validCid(x.cid) && typeof x.vaultId==='string' && x.vaultId.length<=128 && typeof x.share==='string' && x.share.length<=700000; }
 function safeVaultFetch(x){ return x && x.type==='vault-fetch' && validId(x.to) && validId(x.from) && validCid(x.cid) && typeof x.requestId==='string' && x.requestId.length<=128; }
@@ -321,9 +332,20 @@ const server = http.createServer(async (req,res)=>{
   if(!rateOK(`http:${ip}`,HTTP_RATE_PER_MIN)){res.writeHead(429,{'content-type':'text/plain','retry-after':'60'});return res.end('too many requests')}
   try{
     const host=req.headers.host||`localhost:${PORT}`; const url=new URL(req.url,`http://${host}`);
+    if(url.pathname==='/whitepaper' || url.pathname==='/whitepaper/'){
+      const filePath=path.join(PUBLIC_DIR,'whitepaper.html');
+      const data=fs.readFileSync(filePath);
+      res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store'});
+      return res.end(data);
+    }
+    if(url.pathname==='/whitepaper.md'){
+      const data=fs.readFileSync(path.join(__dirname,'WHITEPAPER.md'));
+      res.writeHead(200,{'content-type':'text/markdown; charset=utf-8','cache-control':'no-store'});
+      return res.end(data);
+    }
     if(url.pathname==='/health'){
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:clients.size,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',clientAuth:'ML-DSA-65',clientWebSocket:'ws-library',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size}));
+      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:connectedSocketCount(),connectedAccounts:[...clients.keys()].filter(accountOnline).length,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',clientAuth:'ML-DSA-65',clientWebSocket:'ws-library',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size}));
     }
     if(url.pathname==='/api/recovery-capsule'){
       const address=String(url.searchParams.get('address')||'').toUpperCase();
@@ -383,7 +405,7 @@ function wsSend(ws,obj){try{if(socketOpen(ws))ws.send(JSON.stringify(obj))}catch
 function closeClient(ws){try{ws.close(1000,'replaced')}catch{try{ws.terminate()}catch{}}}
 
 async function handleClientConnection(socket, req){
-  const ip=clientIp(req); let id=null; let authenticated=false;
+  const ip=clientIp(req); let id=null, deviceId=null; let authenticated=false;
   const challenge=crypto.randomBytes(32).toString('base64url');
   socket.freeChallenge=challenge;
   wsSend(socket,{type:'challenge',challenge,version:VERSION,auth:'FREE-AUTH-1'});
@@ -398,13 +420,18 @@ async function handleClientConnection(socket, req){
         if(authenticated)return;
         if(!safeHelloAuth(msg)){wsSend(socket,{type:'auth-error',reason:'invalid-auth-shape'});return}
         if(msg.challenge!==challenge){wsSend(socket,{type:'auth-error',reason:'challenge-mismatch'});return}
-        const card=msg.card,expected=pqIdentityId(card),authBytes=Buffer.from(`FREE-AUTH-1:${msg.id}:${msg.challenge}`,'utf8');
+        const card=msg.card,expected=pqIdentityId(card),authBytes=Buffer.from(`FREE-AUTH-2:${msg.id}:${msg.deviceId}:${msg.challenge}`,'utf8');
         if(expected!==msg.id.toLowerCase()){wsSend(socket,{type:'auth-error',reason:'identity-card-mismatch'});return}
         if(!(await verifyPqSignatureBytes(msg.signature,authBytes,card.sigPublicKey))){wsSend(socket,{type:'auth-error',reason:'signature-invalid'});return}
-        id=msg.id.toLowerCase(); authenticated=true; clearTimeout(authDeadline);
-        const prior=clients.get(id); if(prior&&prior!==socket)closeClient(prior);
-        clients.set(id,socket); contactCards.set(id,card); saveCards(); announcePresence(id,true);
-        wsSend(socket,{type:'hello-ok',id,serverTime:Date.now(),version:VERSION});
+        id=msg.id.toLowerCase(); deviceId=msg.deviceId;
+        deviceRegistry[id]=deviceRegistry[id]||{}; const known=deviceRegistry[id][deviceId];
+        if(known?.revokedAt){wsSend(socket,{type:'auth-error',reason:'device-revoked'});try{socket.close(4003,'device revoked')}catch{};return}
+        deviceRegistry[id][deviceId]={authorizedAt:known?.authorizedAt||Date.now(),lastSeen:Date.now(),revokedAt:0}; saveDevices();
+        authenticated=true; clearTimeout(authDeadline); socket.freeDeviceId=deviceId;
+        let sockets=clients.get(id); if(!sockets){sockets=new Map();clients.set(id,sockets)}
+        const prior=sockets.get(deviceId); if(prior&&prior!==socket)closeClient(prior); sockets.set(deviceId,socket);
+        contactCards.set(id,card); saveCards(); announcePresence(id,true);
+        wsSend(socket,{type:'hello-ok',id,deviceId,serverTime:Date.now(),version:VERSION}); broadcastDeviceList(id);
         const queued=offlineQueue[id]||[]; delete offlineQueue[id]; saveQueue(); for(const q of queued)wsSend(socket,q);
         return;
       }
@@ -415,7 +442,9 @@ async function handleClientConnection(socket, req){
         const svc=socket.freeNodeServiceId?nodeServices.get(socket.freeNodeServiceId):null;
         wsSend(socket,{type:'storage-status',enabled:storageNodes.has(id),available:storageNodes.size,service:svc?publicService(svc):null});return;
       }
-      if(msg.type==='storage-peers'){const peers=[...storageNodes].filter(x=>x!==id && clients.has(x)).slice(0,20);wsSend(socket,{type:'storage-peers',requestId:msg.requestId,peers});return}
+      if(msg.type==='device-list-request'){broadcastDeviceList(id);return}
+      if(msg.type==='device-revoke'&&validDeviceId(msg.targetDeviceId)&&msg.targetDeviceId!==deviceId&&typeof msg.signature==='string'){const bytes=Buffer.from(`FREE-DEVICE-REVOKE-1:${id}:${msg.targetDeviceId}`,'utf8');if(!(await verifyPqSignatureBytes(msg.signature,bytes,contactCards.get(id)?.sigPublicKey||''))){wsSend(socket,{type:'device-error',reason:'revoke-signature-invalid'});return}deviceRegistry[id]=deviceRegistry[id]||{};const d=deviceRegistry[id][msg.targetDeviceId]||{authorizedAt:0,lastSeen:0};d.revokedAt=Date.now();deviceRegistry[id][msg.targetDeviceId]=d;saveDevices();const target=accountSockets(id).get(msg.targetDeviceId);if(target)try{target.close(4003,'device revoked')}catch{};broadcastDeviceList(id);return}
+      if(msg.type==='storage-peers'){const peers=[...storageNodes].filter(x=>x!==id && accountOnline(x)).slice(0,20);wsSend(socket,{type:'storage-peers',requestId:msg.requestId,peers});return}
       if(safeEnvelope(msg)&&msg.from.toLowerCase()===id){const online=route(msg.to,msg,{queue:true});wsSend(socket,{type:'ack',msgId:msg.payload.msgId,queued:!online});return}
       if(safeContactCard(msg)&&msg.from.toLowerCase()===id){route(msg.to,msg,{queue:true});return}
       if(safeVaultStore(msg)&&msg.from.toLowerCase()===id){const online=route(msg.to,msg,{queue:false});wsSend(socket,{type:'vault-route-ack',cid:msg.cid,to:msg.to,online});return}
@@ -430,7 +459,7 @@ async function handleClientConnection(socket, req){
       if(msg.type==='read'&&validId(msg.to)&&validId(msg.from)&&msg.from.toLowerCase()===id&&Array.isArray(msg.msgIds)&&msg.msgIds.length<=100&&msg.msgIds.every(x=>typeof x==='string'&&x.length>=8&&x.length<=128)){route(msg.to,{type:'read',from:msg.from,to:msg.to,msgIds:msg.msgIds},{queue:true});return}
     }catch(err){console.warn('client ws error:',err?.message||err);try{socket.close(1011,'server error')}catch{}}
   });
-  const cleanup=()=>{clearTimeout(authDeadline);if(id&&clients.get(id)===socket){clients.delete(id);announcePresence(id,false)}if(id)storageNodes.delete(id)};
+  const cleanup=()=>{clearTimeout(authDeadline);if(id&&deviceId){const m=clients.get(id);if(m?.get(deviceId)===socket)m.delete(deviceId);if(m&&!m.size){clients.delete(id);announcePresence(id,false)}if(deviceRegistry[id]?.[deviceId]){deviceRegistry[id][deviceId].lastSeen=Date.now();saveDevices()}broadcastDeviceList(id)}if(id&&!accountOnline(id))storageNodes.delete(id)};
   socket.on('close',cleanup); socket.on('error',cleanup);
 }
 
