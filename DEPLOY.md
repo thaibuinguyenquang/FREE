@@ -20,11 +20,11 @@ After deployment verify, in order:
 
 Do not clear browser site data while diagnosing the client because the existing FREE communication identity is local to the browser. FREE-013 remains testnet software with no monetary value and no production decentralized consensus yet.
 
-## FREE-020 independent-node test
-Keep `FOUNDER_GENESIS_SECRET` private and unchanged for the existing Testnet-2 founder identity. A node that should be discoverable by other FREE nodes needs `PUBLIC_NODE_URL` set to its public HTTPS base URL. Additional nodes can use comma-separated `BOOTSTRAP_PEERS` values pointing at known FREE node base URLs. Each FREE-020 node creates and persists a separate ML-DSA-65 federation identity in its `DATA_DIR`; durable `DATA_DIR` storage is therefore important for stable node identity.
+## FREE-021 independent-node test
+Keep `FOUNDER_GENESIS_SECRET` private and unchanged for the existing Testnet-2 founder identity. A node that should be discoverable by other FREE nodes needs `PUBLIC_NODE_URL` set to its public HTTPS base URL. Additional nodes can use comma-separated `BOOTSTRAP_PEERS` values pointing at known FREE node base URLs. Each FREE-021 node creates and persists a separate ML-DSA-65 federation identity in its `DATA_DIR`; durable `DATA_DIR` storage is therefore important for stable node identity.
 
-After deployment, `/health` should report `version: "FREE-020"` and `federationAuth: "ML-DSA-65"`. `federationPeers` greater than zero only proves an authenticated peer connection; it does not prove blockchain consensus.
+After deployment, `/health` should report `version: "FREE-021"` and `federationAuth: "ML-DSA-65"`. `federationPeers` greater than zero only proves an authenticated peer connection; it does not prove blockchain consensus.
 
 
-## FREE-020 verification
-After deploy, verify `/health` reports `version: "FREE-020"`. Test with two independent browser profiles: send both directions, leave one conversation closed to verify unread count, open it to verify sender status reaches `read`, then test remove/block/unblock. Do not clear the founder browser's site data or change `FOUNDER_GENESIS_SECRET`.
+## FREE-021 verification
+After deploy, verify `/health` reports `version: "FREE-021"`. Test with two independent browser profiles: send both directions, leave one conversation closed to verify unread count, open it to verify sender status reaches `read`, then test remove/block/unblock. Do not clear the founder browser's site data or change `FOUNDER_GENESIS_SECRET`.

@@ -1,6 +1,6 @@
-# FREE-020 — Private Alpha Messenger
+# FREE-021 — Private Alpha Messenger
 
-FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-020 advances the usable post-quantum messenger while preserving **FREE Chain Freedom Economy Testnet-2** while preserving the FREE-PQ1 communication path and the rule that user secrets never belong to the chain or founder.
+FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-021 advances the usable post-quantum messenger while preserving **FREE Chain Freedom Economy Testnet-2** while preserving the FREE-PQ1 communication path and the rule that user secrets never belong to the chain or founder.
 
 ## FREE Chain now exists as a testnet ledger
 
@@ -40,16 +40,16 @@ FREE-013 intentionally creates `free-testnet-2` instead of editing the historica
 
 The 500,000,000 FREE Genesis supply is fully conserved in balances: 75,000,000 belongs to the Founder Genesis Economic Identity and the remaining 425,000,000 sits in a locked **Genesis Reserve**. That reserve is intentionally unallocated until simulation determines a defensible mainnet distribution; it is not Founder property. This avoids pretending that undecided Node/Ecosystem/Treasury/Community percentages are already final tokenomics.
 
-## FREE-020
-FREE-020 focuses on a usable post-quantum messenger and the foundation for independently operated FREE nodes. It preserves FREE-013 Testnet-2 economics: 500,000,000 FREE Genesis supply, 75,000,000 FREE Founder Genesis allocation, 2.5% default gross issuance, 4% hard ceiling, and burn accounting without claiming fee burn is implemented.
+## FREE-021
+FREE-021 focuses on a usable post-quantum messenger and the foundation for independently operated FREE nodes. It preserves FREE-013 Testnet-2 economics: 500,000,000 FREE Genesis supply, 75,000,000 FREE Founder Genesis allocation, 2.5% default gross issuance, 4% hard ceiling, and burn accounting without claiming fee burn is implemented.
 
 Changes in this version include persistent public PQ contact cards, reconnect retry for locally retained encrypted outgoing envelopes, and ML-DSA-65-authenticated federation node handshakes with node IDs derived from PQ public keys. These features do not yet make FREE a production decentralized blockchain: validator consensus, Sybil resistance, production metadata privacy, a production PQ ratchet, and audited security remain future work.
 
-### Messenger-first UX in FREE-020
+### Messenger-first UX in FREE-021
 The default product surface is now Chats / People / Network / Settings. Chain, node accounting, storage contribution and cryptographic implementation details are removed from the everyday chat surface and placed behind Network/Settings. Onboarding transitions to the app at the top of the viewport instead of continuing as a long scrolling technical page. PQ relay authentication now allows a longer startup window and remains visibly fail-closed rather than pretending a timed-out session is connected.
 
 
-## FREE-020 reliability milestone
+## FREE-021 reliability milestone
 - Account Recovery now validates the Recovery Kit, restores state in place, and enters Messenger without a reload.
 - Browser client transport now uses the maintained `ws` WebSocket implementation on the server instead of a hand-written WebSocket frame parser.
 - PQ login remains fail-closed: a client is marked connected only after ML-DSA-65 challenge verification succeeds.
@@ -57,23 +57,23 @@ The default product surface is now Chats / People / Network / Settings. Chain, n
 - Testnet-2 economics and Founder Genesis allocation are unchanged.
 
 
-## FREE-020 restore/auth fix
+## FREE-021 restore/auth fix
 - Fixes browser WebSocket rejection caused by the missing same-origin validator.
 - Restore now cleanly replaces onboarding with Messenger instead of rendering both states.
 - Restored display name and Short FREE ID are shown in the Messenger header.
 - No identity, Founder Genesis secret, Testnet-2 genesis, or tokenomics reset.
 
 
-## FREE-020 private-alpha essentials
+## FREE-021 private-alpha essentials
 
-FREE-020 is the first version explicitly shaped for a small private-user alpha after the successful two-account PQ messaging test. It adds local unread counters, authenticated read-receipt routing, clearer message states (`sending`, `sent/queued`, `delivered`, `read`), mobile chat back navigation, contact removal, local blocking and unblock controls.
+FREE-021 is the first version explicitly shaped for a small private-user alpha after the successful two-account PQ messaging test. It adds local unread counters, authenticated read-receipt routing, clearer message states (`sending`, `sent/queued`, `delivered`, `read`), mobile chat back navigation, contact removal, local blocking and unblock controls.
 
 Blocking is deliberately client-controlled in this milestone: a blocked FREE ID is retained only in a local block list and new envelopes/contact-card pushes from that ID are ignored by the client. The relay is not given plaintext or a social-policy role. This is not yet metadata-private blocking: the relay may still observe routing metadata.
 
 Read receipts are optional protocol metadata in the current implementation and reveal to relay infrastructure that one authenticated identity acknowledged message IDs from another. They do not expose message plaintext. A later privacy mode should allow users to disable read receipts and reduce metadata correlation.
 
-FREE-020 does not change FREE Chain Genesis, Founder allocation, monetary policy, cryptographic identity format, Recovery Kit format, or `FOUNDER_GENESIS_SECRET`.
+FREE-021 does not change FREE Chain Genesis, Founder allocation, monetary policy, cryptographic identity format, Recovery Kit format, or `FOUNDER_GENESIS_SECRET`.
 
 
-### FREE-020 recovery
+### FREE-021 recovery
 New accounts use a compact Recovery Address plus Recovery Secret and PIN. The relay stores ciphertext only. Existing FREE-RK1 Recovery Kits can still be restored and migrated.
