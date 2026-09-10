@@ -42,5 +42,5 @@ Keep `DATA_DIR` persistent for recovery capsules, offline queue, device registry
 After deployment, verify at 100% browser zoom that the message composer remains visible. With a recipient account online on a clean/restored browser that has no local contacts, send a new message from an existing contact. The recipient should automatically display the authenticated sender/contact after validating the self-certifying public card and should decrypt the message, while the sender should progress to a delivery acknowledgement.
 
 
-## FREE-028 storage persistence
+## FREE-029 storage persistence
 `DATA_DIR/storage-chunks` and `DATA_DIR/storage-manifests` contain encrypted archive chunks and account manifests. For continuity across redeploys, `DATA_DIR` must be backed by persistent storage. Without a persistent disk, the professional testnet gateway can lose archived ciphertext on service replacement/redeploy even though the client protocol itself remains content-addressed.

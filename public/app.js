@@ -5,7 +5,7 @@ const dbName = 'free-v01'; // compatibility container; FREE-007 keeps the same I
 const CRYPTO_SUITE = 'FREE-PQ1';
 const KEM_NAME = 'ML-KEM-768';
 const SIG_NAME = 'ML-DSA-65';
-const APP_VERSION='FREE-028';
+const APP_VERSION='FREE-029';
 let db, me=null, profile=null, ws=null, selectedId=null;
 let contacts={}, chats={}, blockedIds={}, pendingVault=new Map(), pendingArchive=new Map();
 let readReceiptsEnabled=true,appLockEnabled=false,deviceId='',isUnlocked=false;
@@ -75,8 +75,18 @@ async function encryptArchiveMessage(contactId,m){const key=await deriveArchiveK
 async function decryptArchiveMessage(ciphertext){const packed=unb64(ciphertext);if(packed.length<29)throw new Error('bad archive chunk');const key=await deriveArchiveKey(),iv=packed.slice(0,12),ct=packed.slice(12);const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);const x=JSON.parse(dec.decode(plain));if(x.format!=='FREE-ARCHIVE-MSG-1'||x.accountId!==me.id||!x.message?.msgId)throw new Error('archive identity mismatch');return x}
 function requestArchiveChunk(cid){if(ws?.readyState!==1)return Promise.reject(new Error('offline'));const requestId=uuid();return new Promise((resolve,reject)=>{pendingArchive.set(requestId,{resolve,reject});ws.send(JSON.stringify({type:'archive-get',requestId,cid}));setTimeout(()=>{if(pendingArchive.has(requestId)){pendingArchive.delete(requestId);reject(new Error('archive fetch timeout'))}},8000)})}
 async function hydrateArchive(items=[]){const recent=(Array.isArray(items)?items:[]).slice(-500);let changed=false;for(const it of recent){archivedMsgIds.add(it.msgId);let exists=false;for(const arr of Object.values(chats))if((arr||[]).some(m=>m.msgId===it.msgId)){exists=true;break}if(exists)continue;try{const r=await requestArchiveChunk(it.cid),x=await decryptArchiveMessage(r.ciphertext);if(x.contactCard&&x.contactId&&!contacts[x.contactId]&&await validateCard(x.contactCard))contacts[x.contactId]=x.contactCard;chats[x.contactId]=chats[x.contactId]||[];if(!chats[x.contactId].some(m=>m.msgId===x.message.msgId)){chats[x.contactId].push(x.message);changed=true}}catch(e){console.warn('archive hydrate',e.message)}}await setKV('archivedMsgIds',[...archivedMsgIds].slice(-50000));if(changed){await setKV('contacts',contacts);await setKV('chats',chats);renderContacts();renderChat()}}
-function scheduleArchiveSync(){clearTimeout(archiveTimer);archiveTimer=setTimeout(()=>syncArchive().catch(e=>console.warn('archive sync',e)),1200)}
-async function syncArchive(){if(archiveBusy||!me||ws?.readyState!==1)return;archiveBusy=true;try{for(const [contactId,arr] of Object.entries(chats)){for(const m of arr||[]){if(!m?.msgId||archivedMsgIds.has(m.msgId)||!m.text)continue;const packed=await encryptArchiveMessage(contactId,m),cid=await sha256hex(packed),requestId=uuid();const bytes=enc.encode(`FREE-ARCHIVE-PUT-1:${me.id}:${m.msgId}:${cid}:${packed.byteLength}`);const signature=await Promise.resolve(pq().sign(bytes,me.sigSecretKey));await new Promise((resolve,reject)=>{pendingArchive.set(requestId,{resolve,reject});ws.send(JSON.stringify({type:'archive-put',requestId,msgId:m.msgId,cid,ciphertext:b64(packed),signature}));setTimeout(()=>{if(pendingArchive.has(requestId)){pendingArchive.delete(requestId);reject(new Error('archive store timeout'))}},8000)});archivedMsgIds.add(m.msgId)}}await setKV('archivedMsgIds',[...archivedMsgIds].slice(-50000));let trimmed=false;for(const id of Object.keys(chats)){const arr=chats[id]||[];if(arr.length>250){const cut=arr.length-250;if(arr.slice(0,cut).every(m=>archivedMsgIds.has(m.msgId))){chats[id]=arr.slice(-250);trimmed=true}}}if(trimmed)await setKV('chats',chats)}finally{archiveBusy=false}}
+function scheduleArchiveSync(){clearTimeout(archiveTimer);archiveTimer=setTimeout(()=>syncArchive().catch(e=>console.warn('archive sync',e)),500)}
+async function storeArchiveChunkHttp(contactId,m){
+  const packed=await encryptArchiveMessage(contactId,m),cid=await sha256hex(packed);
+  const bytes=enc.encode(`FREE-ARCHIVE-PUT-1:${me.id}:${m.msgId}:${cid}:${packed.byteLength}`);
+  const signature=await Promise.resolve(pq().sign(bytes,me.sigSecretKey));
+  const body={v:1,suite:CRYPTO_SUITE,accountId:me.id,msgId:m.msgId,cid,ciphertext:b64(packed),signature,card:cardForMe()};
+  const r=await fetch('/api/archive/chunk',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  let out={};try{out=await r.json()}catch{}
+  if(!r.ok)throw new Error(out.error||`archive store rejected (${r.status})`);
+  return out;
+}
+async function syncArchive(){if(archiveBusy||!me)return;archiveBusy=true;try{for(const [contactId,arr] of Object.entries(chats)){for(const m of arr||[]){if(!m?.msgId||archivedMsgIds.has(m.msgId)||!m.text)continue;try{await storeArchiveChunkHttp(contactId,m);archivedMsgIds.add(m.msgId)}catch(e){console.warn('archive store failed',m.msgId,e.message)}}}await setKV('archivedMsgIds',[...archivedMsgIds].slice(-50000));let trimmed=false;for(const id of Object.keys(chats)){const arr=chats[id]||[];if(arr.length>250){const cut=arr.length-250;if(arr.slice(0,cut).every(m=>archivedMsgIds.has(m.msgId))){chats[id]=arr.slice(-250);trimmed=true}}}if(trimmed)await setKV('chats',chats)}finally{archiveBusy=false}}
 function unreadCount(id){return (chats[id]||[]).filter(m=>m.from===id&&!m.readAt).length}
 async function markConversationRead(id){
  if(!id||!contacts[id])return;
@@ -170,7 +180,7 @@ function connect(){
 }
 async function handleWs(msg,sock=ws){
   if(msg.type==='challenge'){try{status(t('authenticating'),false);const card=cardForMe();const authText=enc.encode(`FREE-AUTH-2:${me.id}:${deviceId}:${msg.challenge}`);const signature=await Promise.resolve(pq().sign(authText,me.sigSecretKey));if(sock?.readyState===WebSocket.OPEN)sock.send(JSON.stringify({type:'hello-auth',id:me.id,deviceId,challenge:msg.challenge,card,signature}));}catch(err){console.error('PQ auth sign error',err);status(`${t('authFailed')} · local-sign-error`,false);try{sock?.close(4002,'local sign error')}catch{}}return}
-  if(msg.type==='hello-ok'){clearTimeout(authTimer);status(t('connected'));if(sock?.readyState===1)sock.send(JSON.stringify({type:'device-list-request'}));await pullVaultState().catch(e=>console.warn('vault hydration deferred',e));if(sock?.readyState===1)sock.send(JSON.stringify({type:'archive-manifest-request'}));await resendOutbox();if(storageEnabled&&sock?.readyState===WebSocket.OPEN)sock.send(JSON.stringify({type:'storage-advertise',enabled:true,nodeId:nodeServiceId,capacityMb:nodeCapacityMb}));return}
+  if(msg.type==='hello-ok'){clearTimeout(authTimer);status(t('connected'));if(sock?.readyState===1)sock.send(JSON.stringify({type:'device-list-request'}));await pullVaultState().catch(e=>console.warn('vault hydration deferred',e));if(sock?.readyState===1)sock.send(JSON.stringify({type:'archive-manifest-request'}));scheduleArchiveSync();await resendOutbox();if(storageEnabled&&sock?.readyState===WebSocket.OPEN)sock.send(JSON.stringify({type:'storage-advertise',enabled:true,nodeId:nodeServiceId,capacityMb:nodeCapacityMb}));return}
   if(msg.type==='device-list'){networkDevices=Array.isArray(msg.devices)?msg.devices:[];renderDeviceList();return}
   if(msg.type==='device-error'){alert(msg.reason||'Device operation failed');return}
   if(msg.type==='auth-error'){clearTimeout(authTimer);status(`${t('authFailed')}${msg.reason?' · '+msg.reason:''}`,false);return}
@@ -273,7 +283,7 @@ async function restoreAccountFromKit(){
 }
 async function refreshChain(){try{const r=await fetch('/api/chain',{cache:'no-store'});if(!r.ok)return;const c=await r.json();$('#chainHeight').textContent=String(c.height??0);$('#founderAddress').textContent=c.addresses?.founder||'—';$('#founderBalance').textContent=`${Number(c.balances?.founder||0).toFixed(6)} FREE`;$('#genesisHash').textContent=c.genesisHash||'—';$('#latestBlockHash').textContent=c.latestBlockHash||'—';const secs=Math.max(0,Math.ceil((Number(c.nextEpochAt||0)-Date.now())/1000));$('#chainNextEpoch').textContent=`Testnet · reward epoch tiếp theo ~ ${secs}s`; }catch(e){console.warn('chain status',e)}}
 function bootReady(){const b=$('#bootFallback');if(b)b.hidden=true}
-function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');b.querySelector('span').textContent=`FREE-028 không khởi động được: ${e?.message||e}`;b.querySelector('small').textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
+function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');b.querySelector('span').textContent=`FREE-029 không khởi động được: ${e?.message||e}`;b.querySelector('small').textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
 
 async function init(){
  currentLang=localStorage.getItem('free-lang')||((navigator.language||'').toLowerCase().startsWith('vi')?'vi':'en');setLanguage(currentLang);db=await openDB();

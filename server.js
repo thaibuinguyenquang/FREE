@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-028';
+const VERSION = 'FREE-029';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -404,6 +404,25 @@ const server = http.createServer(async (req,res)=>{
       }
       res.writeHead(405);return res.end('method not allowed');
     }
+    if(url.pathname==='/api/archive/chunk'){
+      if(req.method!=='PUT'){res.writeHead(405);return res.end('method not allowed')}
+      if(!originAllowed(req)){res.writeHead(403);return res.end('forbidden')}
+      const body=await readJsonBody(req,1400000);
+      const accountId=String(body.accountId||'').toLowerCase();
+      if(body.v!==1||body.suite!=='FREE-PQ1'||!validId(accountId)||typeof body.msgId!=='string'||body.msgId.length>128||!validCid(body.cid)||typeof body.ciphertext!=='string'||body.ciphertext.length>900000||typeof body.signature!=='string'||!body.card){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid archive chunk'}))}
+      const card=body.card;
+      if(!(card&&card.v===2&&card.cryptoSuite==='FREE-PQ1'&&card.kem==='ML-KEM-768'&&card.signature==='ML-DSA-65'&&card.id===accountId&&typeof card.kemPublicKey==='string'&&typeof card.sigPublicKey==='string'&&pqIdentityId(card)===accountId)){res.writeHead(403,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid account card'}))}
+      const raw=Buffer.from(body.ciphertext,'base64');
+      const cid=crypto.createHash('sha256').update(raw).digest('hex');
+      if(cid!==String(body.cid).toLowerCase()){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'cid-mismatch'}))}
+      const bytes=Buffer.from(`FREE-ARCHIVE-PUT-1:${accountId}:${body.msgId}:${body.cid}:${raw.length}`,'utf8');
+      if(!(await verifyPqSignatureBytes(body.signature,bytes,card.sigPublicKey))){res.writeHead(403,{'content-type':'application/json'});return res.end(JSON.stringify({error:'signature-invalid'}))}
+      if(!fs.existsSync(archiveChunkFile(body.cid)))fs.writeFileSync(archiveChunkFile(body.cid),body.ciphertext,'utf8');
+      const m=readArchiveManifest(accountId);
+      if(!(m.items||[]).some(x=>x.msgId===body.msgId)){m.items=(m.items||[]).concat([{msgId:body.msgId,cid:body.cid,bytes:raw.length,storedAt:Date.now()}]).slice(-50000);m.updatedAt=Date.now();saveArchiveManifest(m)}
+      res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,msgId:body.msgId,cid:body.cid,bytes:raw.length,proof:'content-addressed-ciphertext-receipt'}))
+    }
+
     if(url.pathname==='/api/card'){
       const id=(url.searchParams.get('id')||'').toLowerCase();
       if(!validId(id)){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'bad id'}))}
