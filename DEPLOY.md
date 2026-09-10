@@ -1,13 +1,21 @@
-# FREE-011 deployment
+# FREE-013 deployment — Testnet-2 Genesis
 
-Upgrade the existing Render service directly to FREE-011. Replace the repository root with this package and commit `FREE011`. Render should run `npm install` and `npm start`.
+FREE-013 deliberately starts a **new chain**: `free-testnet-2`. It does not rewrite or migrate balances/blocks from the earlier `free-testnet-1` ledger.
 
-After deployment, verify `/health` reports `FREE-011`. Then open `/api/chain`: it must report `network: FREE Chain Genesis Testnet`, `height >= 0`, a `genesisHash`, a founder economic address and `postQuantumSignedBlocks: true`. After about 60 seconds on the default testnet policy, refresh `/api/chain`; height should increase and founder balance should become greater than zero.
+The new ledger is stored as `data/free-chain-testnet-2.json`. If the old `data/free-chain-testnet.json` exists, FREE-013 reads only its public chain identifiers/hashes and records a read-only migration reference in the new Genesis state. The old file is never modified by the migration code.
 
-Do not clear browser site data while diagnosing the prior black-screen issue because the existing FREE identity is stored locally. FREE-011 now shows a persistent boot/error screen instead of silently displaying black if client initialization fails.
+Keep the existing Render secret `FOUNDER_GENESIS_SECRET` unchanged. The same secret preserves the Founder Genesis Economic Identity, while the new Testnet-2 Genesis assigns exactly 75,000,000 FREE (15% of 500,000,000) to that address.
 
-The testnet chain file and PQ chain-authority key are stored under `DATA_DIR`. Render instances without persistent disk may lose/reset this testnet state on redeploy. Do not treat the current testnet authority key as production custody.
+Deploy by replacing the GitHub repository root with FREE-013 and commit `FREE013`. Render should run `npm install` and `npm start`.
 
-## Founder Genesis secret (required)
+After deployment verify, in order:
 
-Before the deploy, add a Render secret environment variable named `FOUNDER_GENESIS_SECRET`. Use a high-entropy value at least 32 characters long and keep a private offline backup. Never commit it to GitHub. FREE-011 refuses to start without it. The same value deterministically produces the same `FREE1-GENESIS-*` founder economic address on every redeploy. After deployment, open `/api/founder` to see the public founder address and reward balance. Do not change this secret after Genesis, or the node will reject the stored chain because the founder public key/address no longer matches.
+1. `/health` reports `FREE-013`.
+2. `/api/chain` reports `chainId: free-testnet-2` and `network: FREE Chain Freedom Economy Testnet-2`.
+3. Genesis supply is `500000000` FREE.
+4. Founder Genesis allocation is `75000000` FREE.
+5. `genesisReserve` is `425000000` FREE and is marked locked/unallocated.
+6. `policy.annualInflationRate` is `0.025` and `hardMaxGrossInflation` is `0.04`.
+7. After roughly 60 seconds, height increases and protocol emission is distributed according to the test policy.
+
+Do not clear browser site data while diagnosing the client because the existing FREE communication identity is local to the browser. FREE-013 remains testnet software with no monetary value and no production decentralized consensus yet.

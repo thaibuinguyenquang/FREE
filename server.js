@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-011';
+const VERSION = 'FREE-013';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -79,12 +79,12 @@ const ECON_POLICY = Object.freeze({
   id: 'FREE-ECON-1',
   version: 1,
   epochSeconds: Math.max(60, Number(process.env.ECON_EPOCH_SECONDS || 86400)),
-  annualInflationRate: Math.max(0, Math.min(1, Number(process.env.ECON_ANNUAL_INFLATION || 0.05))),
+  annualInflationRate: Math.max(0, Math.min(1, Number(process.env.ECON_ANNUAL_INFLATION || 0.025))),
   founderShare: Math.max(0, Math.min(1, Number(process.env.ECON_FOUNDER_SHARE || 0.10))),
   nodeShare: Math.max(0, Math.min(1, Number(process.env.ECON_NODE_SHARE || 0.65))),
   ecosystemShare: Math.max(0, Math.min(1, Number(process.env.ECON_ECOSYSTEM_SHARE || 0.15))),
   treasuryShare: Math.max(0, Math.min(1, Number(process.env.ECON_TREASURY_SHARE || 0.10))),
-  genesisSupply: Math.max(0, Number(process.env.ECON_GENESIS_SUPPLY || 1000000000)),
+  genesisSupply: Math.max(0, Number(process.env.ECON_GENESIS_SUPPLY || 500000000)),
   activationDelaySeconds: Math.max(0, Number(process.env.ECON_POLICY_TIMELOCK_SECONDS || 172800))
 });
 function assertEconomicPolicy(){

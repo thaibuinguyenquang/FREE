@@ -1,6 +1,6 @@
 # FREE White Paper
 
-**Living document — updated through FREE-011 Genesis Testnet**
+**Living document — updated through FREE-013 Freedom Economy Testnet**
 
 ## Abstract
 FREE is a post-quantum-native private communication protocol, decentralized node network, distributed encrypted-storage system and native economic network. The FREE application is the first client, not the owner of the network. Users own their cryptographic identities, keys and data. Network operators may contribute useful resources and receive protocol rewards. Economic and upgrade authority can evolve the network without granting any authority over user plaintext or private keys.
@@ -28,25 +28,25 @@ Content is encrypted end-to-end before untrusted relay/storage infrastructure re
 Nodes can provide relay, routing, encrypted mailbox and distributed storage services. Ordinary users are not required to volunteer storage. Users may opt in to resource contribution, while professional/community/self-hosted nodes can provide durable capacity. Identity, node and economic/payment identities are separated to reduce correlation and prevent economic control from becoming account control.
 
 ## 6. Proof of Useful Service
-Rewards should correspond to useful network service rather than wasteful computation. The target service score includes encrypted storage, availability, retrieval success, bandwidth and reliability, with challenge-response proofs and anti-Sybil defenses. FREE-011 still has only the foundation/test accounting for this model.
+Rewards should correspond to useful network service rather than wasteful computation. The target service score includes encrypted storage, availability, retrieval success, bandwidth and reliability, with challenge-response proofs and anti-Sybil defenses. FREE-013 still has only foundation/test accounting; production challenge proofs, anti-Sybil scoring, graceful exit and repair are roadmap work.
 
 ## 7. FREE Chain
-FREE-011 creates the first FREE Chain Genesis Testnet. Its purpose is economic coordination and protocol state, not chat storage. The chain records blocks, state roots, transaction roots, native FREE balances, economic policy, security epochs and protocol-generated reward transactions. Genesis is followed by ML-DSA-65-signed blocks.
+FREE-010/011 created the first FREE Chain Genesis Testnet; FREE-013 evolves its economic constitution. Its purpose is economic coordination and protocol state, not chat storage. The chain records blocks, state roots, transaction roots, native FREE balances, economic policy, security epochs and protocol-generated reward transactions. Genesis is followed by ML-DSA-65-signed blocks.
 
 The testnet currently uses a single authoritative block producer and therefore is not yet decentralized consensus. Future milestones require validator identities, node-to-node block propagation, deterministic validation, fork choice/finality and Byzantine/Sybil defenses.
 
-## 8. FREE Token and inflation
-FREE is intended to become the native economic asset of FREE Chain. FREE-011 units are testnet-only and have no monetary value. The protocol's economic model creates new emission periodically according to an explicit inflation policy. New emission is allocated among node operators, founder/development, ecosystem and treasury pools.
+## 8. FREE Token and monetary policy
+FREE is intended to become the native economic asset of FREE Chain. FREE-013 units remain testnet-only and have no monetary value. The current design has **no maximum supply**, but gross issuance is constitutionally capped at **4% annualized**. The default testnet target is **2.5%**, deliberately below the ceiling.
 
-FREE-011 binds Founder/Developer rewards to a dedicated **Founder Genesis Economic Identity**. A founder-held high-entropy secret deterministically derives an ML-DSA-65 economic keypair. The public address is formatted `FREE1-GENESIS-<public-key fingerprint>`. The secret/private key never enters chain state, user data, or public APIs. Founder reward is defined as:
+The mainnet design target begins from **500,000,000 FREE Genesis supply**. The Founder Genesis Economic Identity receives **15% at Genesis = 75,000,000 FREE**. Future issuance is a separate mechanism and is currently modeled as 10% Founder/Development, 65% Nodes, 15% Ecosystem and 10% Treasury. These non-Founder allocation percentages remain testnet assumptions subject to simulation before mainnet.
+
+`NewEmission(epoch) = Supply × min(TargetIssuance, 4%) × EpochDuration / Year`
 
 `FounderReward(epoch) = NewEmission(epoch) × FounderShare`
 
-and:
+The target fee economy burns a transparent portion of network fees so net supply growth can be below gross issuance and can become negative when burn exceeds issuance. FREE-013 records burn accounting fields, but **actual fee charging and burn transactions are not yet implemented**. Burn must arise from real network activity rather than artificial destruction solely to influence price.
 
-`NewEmission(epoch) = Supply × AnnualInflationRate × EpochDuration / Year`
-
-This reward does not debit user balances and is not an arbitrary admin mint. Parameters are expected to evolve through signed, public, versioned policy with timelocks and emergency procedures.
+Founder reward never debits user balances. Ordinary economic authority must not exceed the 4% gross-issuance ceiling, arbitrarily rewrite balances, seize user funds or mint outside protocol rules.
 
 ## 9. Founder and protocol authority
 FREE is founder-led during early development. The intended authority model separates Upgrade, Economic, Emergency and Treasury roles. The founder can direct economics, protocol evolution, chain upgrades and emergency security migrations, including replacing cryptographic suites when necessary. Those powers must not expose APIs or keys capable of decrypting user data, seizing account identity, reading Recovery secrets or rewriting user plaintext.
@@ -63,7 +63,12 @@ FREE Inc. or other service providers may sell premium storage, bandwidth, manage
 Protocol upgrades are versioned. Normal upgrades should be signed and timelocked; emergency authority may pause vulnerable economic/protocol modules and activate security migrations. User-security invariants—no master decryption key, client-controlled private keys, no plaintext on chain—are constitutional design boundaries rather than ordinary economic parameters.
 
 ## 13. Current status
-FREE-011 is experimental software. It demonstrates a PQ-native browser identity/messaging path, federation foundation, encrypted-vault experiments, node service accounting, deterministic inflation logic and a native Genesis Testnet ledger. It does not yet provide production consensus, production anonymous routing, a production PQ ratchet, mature distributed storage repair, transferable token wallets, production governance, or audited security.
+FREE-013 is experimental software. It demonstrates a PQ-native browser identity/messaging path, federation foundation, encrypted-vault experiments, node service accounting, deterministic inflation logic and a native Genesis Testnet ledger. It does not yet provide production consensus, production anonymous routing, a production PQ ratchet, mature distributed storage repair, transferable token wallets, production governance, or audited security.
 
 ## 14. Roadmap
-Near-term work: stabilize FREE-011 client authentication/onboarding; run multiple FREE nodes; add peer chain synchronization and validator consensus; add transferable PQ economic wallet transactions beyond the Founder Genesis identity; bind useful-service proofs to on-chain node rewards; implement signed policy/upgrade authorities and timelocks; improve distributed storage durability; then test economic simulations before any real-value token launch. Privacy and user-key sovereignty remain mandatory throughout.
+Near-term work: stabilize FREE-013 client authentication/onboarding; run multiple FREE nodes; add peer chain synchronization and validator consensus; add transferable PQ economic wallet transactions beyond the Founder Genesis identity; bind useful-service proofs to on-chain node rewards; implement signed policy/upgrade authorities and timelocks; improve distributed storage durability; then test economic simulations before any real-value token launch. Privacy and user-key sovereignty remain mandatory throughout.
+
+## 15. Testnet-2 Genesis transition
+FREE-013 establishes `free-testnet-2` as a new experimental genesis rather than rewriting the immutable history of the earlier Testnet-1 ledger. Where Testnet-1 data is locally available, Testnet-2 records only a read-only continuity reference (chain ID and public hashes/height). No old block is mutated and no Testnet-1 balance is silently transformed into Testnet-2 state.
+
+Testnet-2 starts with 500,000,000 FREE. Exactly 75,000,000 FREE (15%) is assigned to the Founder Genesis Economic Identity. The remaining 425,000,000 FREE is held in a protocol-labeled, locked Genesis Reserve and is explicitly **unallocated** pending economic simulation. The reserve is not Founder property. This preserves supply accounting without prematurely fixing the remaining 85% mainnet allocation.

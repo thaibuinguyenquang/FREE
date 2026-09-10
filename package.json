@@ -1,8 +1,8 @@
 {
   "name": "free-protocol",
-  "version": "0.11.0",
+  "version": "0.13.0",
   "private": true,
-  "description": "FREE-011 post-quantum messenger and FREE Chain Genesis Testnet",
+  "description": "FREE-013 Freedom Economy Testnet-2",
   "type": "commonjs",
   "engines": {
     "node": ">=20.19.0"
