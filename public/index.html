@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#080808">
-  <title>FREE-014 · Messenger + Independent Network</title>
+  <title>FREE-015 · Messenger First</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div id="bootFallback" class="boot-fallback"><strong>F R E E</strong><span>Đang khởi động FREE-014…</span><small>Nếu màn hình này không biến mất, ứng dụng sẽ hiển thị lỗi thay vì để màn hình đen.</small></div>
+  <div id="bootFallback" class="boot-fallback"><strong>F R E E</strong><span>Đang khởi động FREE-015…</span><small>Nếu màn hình này không biến mất, ứng dụng sẽ hiển thị lỗi thay vì để màn hình đen.</small></div>
   <div class="lang-switch" aria-label="Language"><button id="langVI">VI</button><button id="langEN">EN</button></div>
 
   <section id="onboarding" class="onboarding" hidden>
@@ -64,90 +64,23 @@
     </div>
   </section>
 
-  <main id="appShell" class="shell" hidden>
-    <header class="topbar">
-      <div><div class="brand">F R E E</div><div class="tagline" data-i18n="tagline">post-quantum native · danh tính của bạn · khóa của bạn · tin nhắn của bạn</div></div>
-      <div id="status" class="status" data-good="0">...</div>
-    </header>
+  <main id="appShell" class="free-app" hidden>
+    <header class="appbar"><div class="brand">F R E E</div><div id="status" class="status" data-good="0">...</div></header>
+    <nav class="main-nav" aria-label="FREE"><button class="nav-btn active" data-view="chatsView">Chats</button><button class="nav-btn" data-view="peopleView">People</button><button class="nav-btn" data-view="networkView">Network</button><button class="nav-btn" data-view="settingsView">Settings</button></nav>
 
-    <section class="card identity-card">
-      <div class="section-head">
-        <div>
-          <span class="eyebrow">FREE-PQ1 · ML-KEM-768 + ML-DSA-65</span>
-          <h2 id="displayNameHeading">FREE</h2>
-          <div class="identity-label"><span data-i18n="shortId">FREE ID rút gọn</span> <code id="shortId"></code></div>
-          <details><summary data-i18n="fullId">Full cryptographic ID</summary><code id="myId"></code></details>
-        </div>
-        <div class="head-actions"><button id="editProfile" class="btn ghost" data-i18n="settings">Cài đặt</button><button id="shareInvite" class="btn" data-i18n="shareId">Chia sẻ FREE ID</button></div>
-      </div>
-      <div class="identity-grid">
-        <img id="qr" class="qr" alt="FREE identity QR">
-        <textarea id="inviteLink" readonly></textarea>
-        <button id="copyInvite" class="btn light" data-i18n="copyLink">Sao chép liên kết</button>
-      </div>
-      <p class="note" data-i18n="identityNote">Private key hậu lượng tử chỉ ở phía bạn. Short ID dùng để chia sẻ; Full ID và public key dùng để xác minh mật mã.</p>
-    </section>
-
-    <section id="settingsPanel" class="card settings-card" hidden>
-      <div class="section-head"><div><span class="eyebrow" data-i18n="security">BẢO MẬT</span><h2 data-i18n="accountSettings">Tài khoản & Recovery</h2></div><button id="closeSettings" class="btn ghost">×</button></div>
-      <div class="settings-grid">
-        <div><label data-i18n="displayName">Tên hiển thị</label><div class="inline"><input id="profileName" maxlength="40"><button id="saveProfileName" class="btn" data-i18n="save">Lưu</button></div><p class="mini" data-i18n="nameNote">Tên có thể thay đổi; FREE ID cryptographic không đổi.</p></div>
-        <div><label data-i18n="changePin">Đổi PIN 4–6 số</label><input id="oldPin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN hiện tại"><div class="inline"><input id="changePin1" type="password" inputmode="numeric" maxlength="6" placeholder="PIN mới"><input id="changePin2" type="password" inputmode="numeric" maxlength="6" placeholder="Nhập lại"></div><button id="changePinBtn" class="btn" data-i18n="changePinBtn">Đổi PIN & cập nhật Recovery Kit</button></div>
-      </div>
-      <div class="recovery-box">
-        <label data-i18n="recoveryKitLabel">Recovery Kit</label>
-        <textarea id="accountRecoveryKit" readonly></textarea>
-        <div class="recovery-actions"><button id="refreshRecovery" class="btn ghost" data-i18n="refreshKit">Cập nhật Kit</button><button id="copyAccountKit" class="btn ghost" data-i18n="copy">Sao chép</button><button id="downloadAccountKit" class="btn" data-i18n="saveFile">Lưu file</button></div>
-        <p class="warning" data-i18n="kitWarning">Không gửi Recovery Kit hoặc PIN cho bất kỳ ai. Bản prototype này chưa có bộ đếm thử sai chống rollback ở cấp mạng.</p>
+    <section id="chatsView" class="app-view active-view">
+      <div class="messenger-layout">
+        <aside class="conversation-list"><div class="view-title"><h1>Chats</h1><button id="newChatBtn" class="round-btn" type="button">＋</button></div><div id="contacts"></div></aside>
+        <section class="conversation"><div class="chat-head"><div><h2 id="chatTitle">Chọn một người để nhắn tin</h2><small>End-to-end encrypted</small></div><span class="e2ee">PQ E2EE</span></div><div id="messages" class="messages"><div class="empty-chat">Tin nhắn của bạn được mã hóa đầu-cuối.</div></div><form id="composer" class="composer" hidden><input id="messageInput" autocomplete="off" maxlength="12000" placeholder="Tin nhắn"><button class="btn" type="submit">Gửi</button></form></section>
       </div>
     </section>
 
-    <div class="chat-grid">
-      <aside class="card contacts-card">
-        <h2 data-i18n="contacts">Danh bạ</h2>
-        <div class="add-row"><input id="inviteInput" data-i18n-placeholder="pasteInvite" placeholder="Dán liên kết FREE"><button id="addContact" class="btn light" data-i18n="add">Thêm</button></div>
-        <div id="contacts"></div>
-      </aside>
-      <section class="card chat-card">
-        <div class="chat-head"><h2 id="chatTitle" data-i18n="selectContact">Chọn người để trò chuyện</h2><span class="e2ee">PQ E2EE</span></div>
-        <div id="messages" class="messages"></div>
-        <form id="composer" class="composer" hidden><input id="messageInput" autocomplete="off" maxlength="12000" data-i18n-placeholder="message" placeholder="Tin nhắn"><button class="btn" type="submit" data-i18n="send">Gửi</button></form>
-      </section>
-    </div>
+    <section id="peopleView" class="app-view" hidden><div class="simple-page"><div class="view-title"><div><h1>People</h1><p>Thêm người bằng FREE link hoặc QR.</p></div></div><div class="card clean-card"><div class="add-row"><input id="inviteInput" placeholder="Dán FREE link"><button id="addContact" class="btn">Thêm</button></div><div class="share-row"><div><strong id="displayNameHeading">FREE</strong><div>FREE ID <code id="shortId"></code></div></div><button id="shareInvite" class="btn">Chia sẻ FREE ID</button></div><div id="sharePanel" hidden><img id="qr" class="qr" alt="FREE identity QR"><textarea id="inviteLink" readonly></textarea><button id="copyInvite" class="btn light">Sao chép liên kết</button></div></div></div></section>
 
-    <section class="card network-card">
-      <div class="section-head"><div><span class="eyebrow">FREE NETWORK · TESTNET</span><h2>Đóng góp tài nguyên & phần thưởng</h2></div><div class="node-count"><strong id="testCredits">0.000</strong><span>FREE Test Credits</span></div></div>
-      <p class="lead">Tự nguyện chạy storage node. Dữ liệu được lưu là ciphertext. Test Credits hiện không có giá trị tiền tệ và không thể chuyển nhượng.</p>
-      <div class="settings-grid">
-        <div><label>Dung lượng muốn đóng góp</label><div class="inline"><input id="nodeCapacity" type="number" min="100" max="102400" step="100" value="1024"><span>MB</span></div></div>
-        <div><label>Node Identity</label><code id="nodeServiceId">—</code><p class="mini">Tách biệt với FREE Account Identity. Payment Identity tương lai cũng sẽ tách riêng.</p></div>
-      </div>
-      <div class="recovery-box"><strong>Proof of Useful Service — foundation</strong><p class="mini">FREE-014 ghi nhận encrypted-storage receipts để đo dịch vụ thật. Chưa phải cơ chế chống Sybil/Proof-of-Service production.</p><div id="serviceStats" class="note">0 bytes · 0 receipts</div></div>
-    </section>
+    <section id="networkView" class="app-view" hidden><div class="simple-page"><div class="view-title"><div><h1>FREE Network</h1><p>Phần thử nghiệm dành cho người muốn đóng góp tài nguyên. Không cần dùng mục này để nhắn tin.</p></div></div><div class="network-summary"><div class="metric"><span>Chain</span><strong id="chainHeight">0</strong><small>block height</small></div><div class="metric"><span>Storage nodes</span><strong id="storageCount">0</strong><small>online</small></div><div class="metric"><span>Test credits</span><strong id="testCredits">0.000</strong><small>không có giá trị tiền tệ</small></div></div><details class="card clean-card"><summary>Đóng góp storage node</summary><div class="detail-body"><label class="toggle-row"><input id="storageToggle" type="checkbox"><span class="toggle"></span><span><strong>Storage Node</strong><small id="storageState"></small></span></label><label>Dung lượng tối đa</label><div class="inline"><input id="nodeCapacity" type="number" min="100" max="102400" step="100" value="1024"><span>MB</span></div><p class="mini">Node Identity <code id="nodeServiceId">—</code></p><div id="serviceStats" class="note">0 bytes · 0 receipts</div></div></details><details class="card clean-card"><summary>FREE Chain testnet</summary><div class="detail-body"><p>Chat, file và khóa người dùng không nằm trên chain.</p><label>Founder Economic Address</label><code id="founderAddress">—</code><label>Founder testnet balance</label><strong id="founderBalance">0 FREE</strong><p id="chainNextEpoch" class="mini">—</p><label>Genesis Hash</label><code id="genesisHash">—</code><label>Latest Block</label><code id="latestBlockHash">—</code></div></details><details class="card clean-card"><summary>Distributed encrypted vault · experimental</summary><div class="detail-body"><button id="backupBtn" class="btn">Tạo backup phân tán</button><textarea id="recoveryKit" placeholder="Vault Recovery Kit"></textarea><div class="recovery-actions"><button id="copyKit" class="btn ghost">Sao chép</button><button id="restoreBtn" class="btn light">Khôi phục vault</button></div><div id="vaultProgress" class="note"></div></div></details></div></section>
 
-
-    <section class="card network-card" id="chainCard">
-      <div class="section-head"><div><span class="eyebrow">FREE CHAIN · GENESIS TESTNET</span><h2>Blockchain của FREE</h2></div><div class="node-count"><strong id="chainHeight">0</strong><span>block height</span></div></div>
-      <p class="lead">FREE Chain testnet có Genesis Block, hash-link, state root, native FREE accounting và block sau genesis được ký ML-DSA-65. Chat, file và khóa người dùng không nằm trên chain.</p>
-      <div class="settings-grid"><div><label>Founder Economic Address</label><code id="founderAddress">—</code><p class="mini">Tách khỏi FREE chat identity.</p></div><div><label>Founder reward đã ghi trên chain</label><strong id="founderBalance">0 FREE</strong><p class="mini" id="chainNextEpoch">—</p></div></div>
-      <div class="recovery-box"><strong>Genesis Hash</strong><code id="genesisHash">—</code><br><strong>Latest Block</strong><code id="latestBlockHash">—</code></div>
-    </section>
-    <section class="card vault-card">
-      <div class="section-head"><div><span class="eyebrow" data-i18n="advanced">NÂNG CAO · FREE NETWORK</span><h2 data-i18n="distributedVault">Kho mã hóa phân tán</h2></div><div class="node-count"><strong id="storageCount">0</strong><span data-i18n="storageNodes">storage nodes online</span></div></div>
-      <p class="lead" data-i18n="vaultLead">Phần thử nghiệm: dữ liệu được mã hóa trên thiết bị rồi chia thành 5 shard; bất kỳ 3 shard có thể dựng lại ciphertext.</p>
-      <div class="vault-actions">
-        <label class="toggle-row"><input id="storageToggle" type="checkbox"><span class="toggle"></span><span><strong>Storage Node</strong><small id="storageState"></small></span></label>
-        <button id="backupBtn" class="btn" data-i18n="createBackup">Tạo backup phân tán</button>
-      </div>
-      <div class="recovery-box legacy-vault">
-        <label data-i18n="vaultRecovery">Vault Recovery Kit (thử nghiệm)</label>
-        <textarea id="recoveryKit"></textarea>
-        <div class="recovery-actions"><button id="copyKit" class="btn ghost" data-i18n="copy">Sao chép</button><button id="restoreBtn" class="btn light" data-i18n="restoreVault">Khôi phục vault</button></div>
-      </div>
-      <div id="vaultProgress" class="note"></div>
-    </section>
-
-    <footer>FREE-013 · GENESIS TESTNET · OPEN PROTOCOL · FREE app ≠ FREE network</footer>
+    <section id="settingsView" class="app-view" hidden><div class="simple-page"><div class="view-title"><div><h1>Settings</h1><p>Identity, Recovery và tùy chọn bảo mật.</p></div></div><div class="card clean-card identity-settings"><div class="share-row"><div><strong id="settingsName">FREE</strong><div>FREE ID <code id="settingsShortId">—</code></div></div><span class="security-badge">Post-quantum</span></div><details><summary>Thông tin mật mã nâng cao</summary><code id="myId"></code><p class="mini">FREE-PQ1 · ML-KEM-768 · ML-DSA-65</p></details></div><section id="settingsPanel" class="card clean-card"><h2>Tài khoản & Recovery</h2><label>Tên hiển thị</label><div class="inline"><input id="profileName" maxlength="40"><button id="saveProfileName" class="btn">Lưu</button></div><p class="mini">Tên có thể thay đổi; FREE ID không đổi.</p><label>Đổi PIN 4–6 số</label><input id="oldPin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN hiện tại"><div class="inline"><input id="changePin1" type="password" inputmode="numeric" maxlength="6" placeholder="PIN mới"><input id="changePin2" type="password" inputmode="numeric" maxlength="6" placeholder="Nhập lại"></div><button id="changePinBtn" class="btn">Đổi PIN & cập nhật Recovery Kit</button><label>Recovery Kit</label><textarea id="accountRecoveryKit" readonly></textarea><div class="recovery-actions"><button id="refreshRecovery" class="btn ghost">Cập nhật Kit</button><button id="copyAccountKit" class="btn ghost">Sao chép</button><button id="downloadAccountKit" class="btn">Lưu file</button></div><p class="warning">Không gửi Recovery Kit hoặc PIN cho bất kỳ ai.</p><button id="editProfile" hidden></button><button id="closeSettings" hidden></button></section></div></section>
+    <footer>FREE-015 · TESTNET · FREE app ≠ FREE network</footer>
   </main>
   <script src="/pq.bundle.js"></script>
   <script src="/app.js"></script>

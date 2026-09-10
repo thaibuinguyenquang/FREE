@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-014';
+const VERSION = 'FREE-015';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
