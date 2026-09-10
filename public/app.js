@@ -5,7 +5,7 @@ const dbName = 'free-v01'; // compatibility container; FREE-007 keeps the same I
 const CRYPTO_SUITE = 'FREE-PQ1';
 const KEM_NAME = 'ML-KEM-768';
 const SIG_NAME = 'ML-DSA-65';
-const APP_VERSION='FREE-013';
+const APP_VERSION='FREE-014';
 let db, me=null, profile=null, ws=null, selectedId=null;
 let contacts={}, chats={}, pendingVault=new Map();
 let storageEnabled=false, currentLang='vi', authTimer=null, nodeServiceId='', nodeCapacityMb=1024;
@@ -73,7 +73,7 @@ async function addFromInvite(input){const card=await parseInvite(input);await ad
 function connect(){if(!me)return;const proto=location.protocol==='https:'?'wss':'ws';ws=new WebSocket(`${proto}://${location.host}/ws`);ws.onopen=()=>{status(t('authenticating'));clearTimeout(authTimer);authTimer=setTimeout(()=>{if(ws?.readyState===1)status(t('authTimeout'),false)},10000)};ws.onclose=()=>{clearTimeout(authTimer);status(t('reconnecting'),false);setTimeout(connect,1800)};ws.onerror=()=>status(t('connectionError'),false);ws.onmessage=e=>{try{handleWs(JSON.parse(e.data))}catch(err){console.error('WS message error',err)}}}
 async function handleWs(msg){
   if(msg.type==='challenge'){const card=cardForMe();const authText=enc.encode(`FREE-AUTH-1:${me.id}:${msg.challenge}`);const signature=pq().sign(authText,me.sigSecretKey);ws.send(JSON.stringify({type:'hello-auth',id:me.id,challenge:msg.challenge,card,signature}));return}
-  if(msg.type==='hello-ok'){clearTimeout(authTimer);status(t('connected'));if(storageEnabled)ws.send(JSON.stringify({type:'storage-advertise',enabled:true,nodeId:nodeServiceId,capacityMb:nodeCapacityMb}));return}
+  if(msg.type==='hello-ok'){clearTimeout(authTimer);status(t('connected'));await resendOutbox();if(storageEnabled)ws.send(JSON.stringify({type:'storage-advertise',enabled:true,nodeId:nodeServiceId,capacityMb:nodeCapacityMb}));return}
   if(msg.type==='auth-error'){clearTimeout(authTimer);status(`${t('authFailed')}${msg.reason?' · '+msg.reason:''}`,false);return}
   if(msg.type==='ack'){for(const id of Object.keys(chats)){const m=(chats[id]||[]).find(x=>x.msgId===msg.msgId);if(m){m.status=msg.queued?'queued':'sent';await saveState();if(id===selectedId)renderChat();break}}return}
   if(msg.type==='delivery'){for(const id of Object.keys(chats)){const m=(chats[id]||[]).find(x=>x.msgId===msg.msgId);if(m){m.status='delivered';await saveState();if(id===selectedId)renderChat();break}}return}
@@ -94,8 +94,9 @@ async function sendMessage(text){
   if(!selectedId||!contacts[selectedId])return;const c=contacts[selectedId];if(c.cryptoSuite!==CRYPTO_SUITE)throw new Error('This contact uses an obsolete classical identity. Re-add their FREE-PQ identity.');
   const msgId=uuid(),sentAt=Date.now();const kem=pq().encapsulate(c.kemPublicKey);const key=await messageKey(kem.sharedSecret,me.id,c.id,msgId);const iv=crypto.getRandomValues(new Uint8Array(12));const aad=aadFor(me.id,c.id,msgId,sentAt,kem.cipherText);const ciphertext=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad},key,enc.encode(text));
   const signable={suite:CRYPTO_SUITE,from:me.id,to:c.id,msgId,sentAt,kemCiphertext:kem.cipherText,iv:b64(iv),ciphertext:b64(ciphertext)};const signature=await signObject(signable);const payload={...signable,signature};
-  chats[c.id]=chats[c.id]||[];chats[c.id].push({msgId,from:me.id,to:c.id,text,sentAt,status:'sending',suite:CRYPTO_SUITE});await saveState();renderChat();if(ws?.readyState!==1){chats[c.id].at(-1).status='offline';await saveState();renderChat();return}ws.send(JSON.stringify({type:'envelope',from:me.id,to:c.id,payload}))
+  const wire={type:'envelope',from:me.id,to:c.id,payload};chats[c.id]=chats[c.id]||[];chats[c.id].push({msgId,from:me.id,to:c.id,text,sentAt,status:'sending',suite:CRYPTO_SUITE,wire});await saveState();renderChat();if(ws?.readyState!==1){chats[c.id].at(-1).status='offline';await saveState();renderChat();return}ws.send(JSON.stringify(wire))
 }
+async function resendOutbox(){if(ws?.readyState!==1)return;let changed=false;for(const id of Object.keys(chats)){for(const m of chats[id]||[]){if(m.from===me.id&&m.wire&&['offline','sending'].includes(m.status)){ws.send(JSON.stringify(m.wire));m.status='sending';changed=true}}}if(changed){await saveState();renderChat()}}
 async function receiveEnvelope(msg){
   const c=contacts[msg.from];if(!c||c.cryptoSuite!==CRYPTO_SUITE)return;const p=msg.payload;if(p.suite!==CRYPTO_SUITE||p.from!==msg.from||p.to!==msg.to)return;
   const signable={suite:p.suite,from:p.from,to:p.to,msgId:p.msgId,sentAt:p.sentAt,kemCiphertext:p.kemCiphertext,iv:p.iv,ciphertext:p.ciphertext};const ok=await verifyObject(signable,p.signature,c.sigPublicKey);if(!ok)return;
@@ -149,7 +150,7 @@ async function restoreAccountFromKit(){const raw=$('#restoreKitInput').value.tri
 
 async function refreshChain(){try{const r=await fetch('/api/chain',{cache:'no-store'});if(!r.ok)return;const c=await r.json();$('#chainHeight').textContent=String(c.height??0);$('#founderAddress').textContent=c.addresses?.founder||'—';$('#founderBalance').textContent=`${Number(c.balances?.founder||0).toFixed(6)} FREE`;$('#genesisHash').textContent=c.genesisHash||'—';$('#latestBlockHash').textContent=c.latestBlockHash||'—';const secs=Math.max(0,Math.ceil((Number(c.nextEpochAt||0)-Date.now())/1000));$('#chainNextEpoch').textContent=`Testnet · reward epoch tiếp theo ~ ${secs}s`; }catch(e){console.warn('chain status',e)}}
 function bootReady(){const b=$('#bootFallback');if(b)b.hidden=true}
-function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');b.querySelector('span').textContent=`FREE-013 không khởi động được: ${e?.message||e}`;b.querySelector('small').textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
+function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');b.querySelector('span').textContent=`FREE-014 không khởi động được: ${e?.message||e}`;b.querySelector('small').textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
 
 async function init(){
  currentLang=localStorage.getItem('free-lang')||((navigator.language||'').toLowerCase().startsWith('vi')?'vi':'en');setLanguage(currentLang);db=await openDB();

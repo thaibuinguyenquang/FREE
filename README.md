@@ -39,3 +39,8 @@ Before deploying FREE-013, create/store one high-entropy `FOUNDER_GENESIS_SECRET
 FREE-013 intentionally creates `free-testnet-2` instead of editing the historical FREE-011/012 Testnet-1 Genesis. The old Testnet-1 ledger, when present, is treated as read-only history. Testnet-2 may record the old chain ID, Genesis hash, latest hash and height as a continuity reference, but no Testnet-1 block or balance is imported as authoritative state.
 
 The 500,000,000 FREE Genesis supply is fully conserved in balances: 75,000,000 belongs to the Founder Genesis Economic Identity and the remaining 425,000,000 sits in a locked **Genesis Reserve**. That reserve is intentionally unallocated until simulation determines a defensible mainnet distribution; it is not Founder property. This avoids pretending that undecided Node/Ecosystem/Treasury/Community percentages are already final tokenomics.
+
+## FREE-014
+FREE-014 focuses on a usable post-quantum messenger and the foundation for independently operated FREE nodes. It preserves FREE-013 Testnet-2 economics: 500,000,000 FREE Genesis supply, 75,000,000 FREE Founder Genesis allocation, 2.5% default gross issuance, 4% hard ceiling, and burn accounting without claiming fee burn is implemented.
+
+Changes in this version include persistent public PQ contact cards, reconnect retry for locally retained encrypted outgoing envelopes, and ML-DSA-65-authenticated federation node handshakes with node IDs derived from PQ public keys. These features do not yet make FREE a production decentralized blockchain: validator consensus, Sybil resistance, production metadata privacy, a production PQ ratchet, and audited security remain future work.

@@ -15,3 +15,8 @@ FREE-013 separates the founder economic identity from user/account identity and 
 
 ## Testnet-2 state conservation
 Genesis supply is 500,000,000 FREE. Founder receives 75,000,000 FREE; the remaining 425,000,000 FREE is represented explicitly in a locked Genesis Reserve so the sum of balances equals total supply. Validation rejects a Testnet-2 ledger that violates the 4% issuance ceiling or supply-conservation invariant. If a Testnet-1 file exists, it is read only to create a public continuity reference and is never mutated.
+
+## FREE-014 network/authentication delta
+Federation peers now use persistent ML-DSA-65 node credentials. A node ID is derived from its PQ public key, and the federation hello signature binds node ID, version, advertised public URL, public key and advertised local user routes. Node credentials are distinct from Account Identity and Founder/Economic Identity.
+
+Public user identity cards contain public keys only and are persisted by a relay for contact resolution; no user private key is written there. Outgoing message retry stores the already encrypted/signed wire envelope in the sender's local IndexedDB alongside local chat state. Relays still see routing metadata, and federation is not anonymous.

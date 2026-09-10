@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-013';
+const VERSION = 'FREE-014';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -65,7 +65,10 @@ function securityHeaders(res) {
 }
 
 const clients = new Map();
+const CARD_FILE = path.join(DATA_DIR,'public-cards.json');
 const contactCards = new Map(); // public PQ identity cards only; never private keys
+try{const saved=JSON.parse(fs.readFileSync(CARD_FILE,'utf8'));for(const [id,card] of Object.entries(saved||{}))contactCards.set(id,card)}catch{}
+function saveCards(){try{const obj={};for(const [id,card] of contactCards)obj[id]=card;atomicWriteJson(CARD_FILE,obj)}catch(err){console.error('card persistence error:',err.message)}}
 const storageNodes = new Set();
 // FREE-008 testnet contribution accounting. Credits have NO monetary value.
 // Account identity, node identity and future payment identity are separate namespaces.
@@ -127,12 +130,25 @@ function publicService(x){return {nodeId:x.nodeId,capacityMb:x.capacityMb,stored
 // end-to-end signed/encrypted. Federation improves availability but does not yet provide
 // metadata anonymity; that is a later protocol layer.
 const NODE_ID_FILE = path.join(DATA_DIR, 'node-identity.json');
-let nodeIdentity;
-try { nodeIdentity = JSON.parse(fs.readFileSync(NODE_ID_FILE, 'utf8')); } catch {
-  nodeIdentity = { nodeId: crypto.randomBytes(20).toString('hex'), createdAt: Date.now() };
-  try { atomicWriteJson(NODE_ID_FILE, nodeIdentity); } catch {}
+let nodeIdentity = null;
+let NODE_ID = '';
+async function initNodeIdentity(){
+  const {ml_dsa65}=await pqModule;
+  try {
+    const saved=JSON.parse(fs.readFileSync(NODE_ID_FILE,'utf8'));
+    if(saved?.suite==='ML-DSA-65'&&saved.publicKey&&saved.secretKey){nodeIdentity=saved;NODE_ID=saved.nodeId;return;}
+  } catch {}
+  const seed=crypto.randomBytes(32);const kp=ml_dsa65.keygen(seed);
+  const publicKey=Buffer.from(kp.publicKey).toString('base64');
+  const secretKey=Buffer.from(kp.secretKey).toString('base64');
+  const nodeId=crypto.createHash('sha512').update('FREE-NODE-PQ1:').update(Buffer.from(kp.publicKey)).digest('hex').slice(0,40);
+  nodeIdentity={v:2,suite:'ML-DSA-65',nodeId,publicKey,secretKey,createdAt:Date.now()};NODE_ID=nodeId;
+  atomicWriteJson(NODE_ID_FILE,nodeIdentity);try{fs.chmodSync(NODE_ID_FILE,0o600)}catch{}
 }
-const NODE_ID = nodeIdentity.nodeId;
+function nodeHelloUnsigned(){return {type:'node-hello',nodeId:NODE_ID,version:VERSION,publicUrl:PUBLIC_NODE_URL,users:[...clients.keys()],suite:'ML-DSA-65',publicKey:nodeIdentity?.publicKey||''}}
+function nodeHelloBytes(x){const users=Array.isArray(x.users)?[...x.users].map(String).sort().join(','):'';return Buffer.from(`FREE-NODE-HELLO-1:${x.nodeId}:${x.version}:${x.publicUrl}:${x.publicKey}:${users}`,'utf8')}
+async function signedNodeHello(){const x=nodeHelloUnsigned();const bytes=nodeHelloBytes(x);const {ml_dsa65}=await pqModule;x.signature=Buffer.from(ml_dsa65.sign(bytes,Buffer.from(nodeIdentity.secretKey,'base64'))).toString('base64');return x}
+async function verifyNodeHello(x){try{if(x?.suite!=='ML-DSA-65'||!x.publicKey||!x.signature)return false;const pk=Buffer.from(x.publicKey,'base64');const expected=crypto.createHash('sha512').update('FREE-NODE-PQ1:').update(pk).digest('hex').slice(0,40);if(expected!==x.nodeId)return false;const bytes=nodeHelloBytes(x);const {ml_dsa65}=await pqModule;return ml_dsa65.verify(Buffer.from(x.signature,'base64'),bytes,pk)}catch{return false}}
 const peerSockets = new Map();          // nodeId -> ws
 const peerUrls = new Map();             // nodeId -> public base URL
 const knownPeerUrls = new Set();
@@ -186,18 +202,18 @@ async function lookupRemoteCard(id, timeoutMs=1800) {
     broadcastPeers({type:'card-request',requestId,id,ttl:5,origin:NODE_ID});
   });
 }
-function registerPeer(ws, hello, outboundUrl='') {
-  const nodeId=String(hello?.nodeId||''); if(!/^[a-f0-9]{16,128}$/i.test(nodeId)||nodeId===NODE_ID){try{ws.close()}catch{};return false}
+async function registerPeer(ws, hello, outboundUrl='') {
+  const nodeId=String(hello?.nodeId||''); if(!/^[a-f0-9]{16,128}$/i.test(nodeId)||nodeId===NODE_ID||!(await verifyNodeHello(hello))){try{ws.close()}catch{};return false}
   const old=peerSockets.get(nodeId); if(old&&old!==ws){try{old.close()}catch{}}
   peerSockets.set(nodeId,ws); ws.freeNodeId=nodeId;
   const advertised=String(hello?.publicUrl||''); if(advertised){peerUrls.set(nodeId,advertised);knownPeerUrls.add(advertised)}
   if(outboundUrl) knownPeerUrls.add(outboundUrl);
   for(const uid of Array.isArray(hello?.users)?hello.users:[]) addRemoteRoute(uid,nodeId);
-  peerSend(ws,{type:'node-hello',nodeId:NODE_ID,version:VERSION,publicUrl:PUBLIC_NODE_URL,users:[...clients.keys()]});
+  peerSend(ws,await signedNodeHello());
   peerSend(ws,{type:'peer-list',peers:[PUBLIC_NODE_URL,...peerUrls.values()].filter(Boolean)});
   return true;
 }
-function handlePeerMessage(ws, raw) {
+async function handlePeerMessage(ws, raw) {
   let msg; try { msg=JSON.parse(String(raw)); } catch { return; }
   if(msg.type==='node-hello'){ registerPeer(ws,msg,ws.freeOutboundUrl||''); return; }
   const peerId=ws.freeNodeId; if(!peerId)return;
@@ -218,10 +234,10 @@ function handlePeerMessage(ws, raw) {
 }
 function attachPeerSocket(ws, outboundUrl='') {
   ws.freeOutboundUrl=outboundUrl;
-  ws.on('message',data=>handlePeerMessage(ws,data));
+  ws.on('message',data=>handlePeerMessage(ws,data).catch(()=>{try{ws.close()}catch{}}));
   ws.on('close',()=>{const nid=ws.freeNodeId;if(nid&&peerSockets.get(nid)===ws)peerSockets.delete(nid);if(nid){for(const [uid,set] of remoteRoutes){set.delete(nid);if(!set.size)remoteRoutes.delete(uid)}}});
   ws.on('error',()=>{});
-  if(outboundUrl) peerSend(ws,{type:'node-hello',nodeId:NODE_ID,version:VERSION,publicUrl:PUBLIC_NODE_URL,users:[...clients.keys()]});
+  if(outboundUrl) signedNodeHello().then(x=>peerSend(ws,x)).catch(()=>{try{ws.close()}catch{}});
 }
 function connectPeer(baseUrl) {
   if(peerSockets.size>=MAX_FEDERATION_PEERS)return;
@@ -289,7 +305,7 @@ const server = http.createServer(async (req,res)=>{
     const host=req.headers.host||`localhost:${PORT}`; const url=new URL(req.url,`http://${host}`);
     if(url.pathname==='/health'){
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:clients.size,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size}));
+      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:clients.size,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size}));
     }
     if(url.pathname==='/api/card'){
       const id=(url.searchParams.get('id')||'').toLowerCase();
@@ -349,7 +365,7 @@ server.on('upgrade',(req,socket)=>{
     const host=req.headers.host||`localhost:${PORT}`,url=new URL(req.url,`http://${host}`);
     if(url.pathname==='/federation'){
       if(!req.headers['sec-websocket-key']||!rateOK(`federation-upgrade:${ip}`,60))return socket.destroy();
-      return federationWss.handleUpgrade(req,socket,Buffer.alloc(0),ws=>{attachPeerSocket(ws);peerSend(ws,{type:'node-hello',nodeId:NODE_ID,version:VERSION,publicUrl:PUBLIC_NODE_URL,users:[...clients.keys()]})});
+      return federationWss.handleUpgrade(req,socket,Buffer.alloc(0),ws=>{attachPeerSocket(ws);signedNodeHello().then(x=>peerSend(ws,x)).catch(()=>{try{ws.close()}catch{}})});
     }
     if(url.pathname!=='/ws'||!req.headers['sec-websocket-key']||!originAllowed(req)||!rateOK(`upgrade:${ip}`,30))return socket.destroy();
     const accept=crypto.createHash('sha1').update(req.headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
@@ -370,7 +386,7 @@ server.on('upgrade',(req,socket)=>{
             const card=msg.card,expected=pqIdentityId(card),authBytes=Buffer.from(`FREE-AUTH-1:${msg.id}:${msg.challenge}`,'utf8');
             if(expected!==msg.id.toLowerCase()){wsSend(socket,{type:'auth-error',reason:'identity-card-mismatch'});continue}
             if(!(await verifyPqSignatureBytes(msg.signature,authBytes,card.sigPublicKey))){wsSend(socket,{type:'auth-error',reason:'signature-invalid'});continue}
-            id=msg.id.toLowerCase();const prior=clients.get(id);if(prior&&prior!==socket&&!prior.destroyed)prior.destroy();clients.set(id,socket);contactCards.set(id,card);announcePresence(id,true);wsSend(socket,{type:'hello-ok',id,serverTime:Date.now(),version:VERSION});const queued=offlineQueue[id]||[];delete offlineQueue[id];saveQueue();for(const q of queued)wsSend(socket,q);continue;
+            id=msg.id.toLowerCase();const prior=clients.get(id);if(prior&&prior!==socket&&!prior.destroyed)prior.destroy();clients.set(id,socket);contactCards.set(id,card);saveCards();announcePresence(id,true);wsSend(socket,{type:'hello-ok',id,serverTime:Date.now(),version:VERSION});const queued=offlineQueue[id]||[];delete offlineQueue[id];saveQueue();for(const q of queued)wsSend(socket,q);continue;
           }
           if(!id)continue;
           if(msg.type==='storage-advertise'){
@@ -395,4 +411,4 @@ server.on('upgrade',(req,socket)=>{
     const cleanup=()=>{if(id&&clients.get(id)===socket){clients.delete(id);announcePresence(id,false)}if(id)storageNodes.delete(id)};socket.on('close',cleanup);socket.on('error',cleanup);
   }catch{socket.destroy()}
 });
-(async()=>{await freeChain.init();freeChain.start();server.listen(PORT,'0.0.0.0',()=>{console.log(`${VERSION} node ${NODE_ID} running on port ${PORT}`);console.log(`FREE Chain genesis ${freeChain.chain.blocks[0].hash}`);schedulePeerConnections()})})().catch(err=>{console.error('fatal startup:',err);process.exit(1)});
+(async()=>{await initNodeIdentity();await freeChain.init();freeChain.start();server.listen(PORT,'0.0.0.0',()=>{console.log(`${VERSION} node ${NODE_ID} running on port ${PORT}`);console.log(`FREE Chain genesis ${freeChain.chain.blocks[0].hash}`);schedulePeerConnections()})})().catch(err=>{console.error('fatal startup:',err);process.exit(1)});

@@ -1,8 +1,8 @@
 {
   "name": "free-protocol",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "private": true,
-  "description": "FREE-013 Freedom Economy Testnet-2",
+  "description": "FREE-014 usable PQ messenger and authenticated independent-node foundation",
   "type": "commonjs",
   "engines": {
     "node": ">=20.19.0"
