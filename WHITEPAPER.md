@@ -1,6 +1,6 @@
 # FREE White Paper
 
-**Living document — updated through FREE-013 Freedom Economy Testnet**
+**Living document — updated through FREE-018 Private Alpha**
 
 ## Abstract
 FREE is a post-quantum-native private communication protocol, decentralized node network, distributed encrypted-storage system and native economic network. The FREE application is the first client, not the owner of the network. Users own their cryptographic identities, keys and data. Network operators may contribute useful resources and receive protocol rewards. Economic and upgrade authority can evolve the network without granting any authority over user plaintext or private keys.
@@ -63,7 +63,7 @@ FREE Inc. or other service providers may sell premium storage, bandwidth, manage
 Protocol upgrades are versioned. Normal upgrades should be signed and timelocked; emergency authority may pause vulnerable economic/protocol modules and activate security migrations. User-security invariants—no master decryption key, client-controlled private keys, no plaintext on chain—are constitutional design boundaries rather than ordinary economic parameters.
 
 ## 13. Current status
-FREE-013 is experimental software. It demonstrates a PQ-native browser identity/messaging path, federation foundation, encrypted-vault experiments, node service accounting, deterministic inflation logic and a native Genesis Testnet ledger. It does not yet provide production consensus, production anonymous routing, a production PQ ratchet, mature distributed storage repair, transferable token wallets, production governance, or audited security.
+FREE-018 is experimental software. It demonstrates a PQ-native browser identity/messaging path, federation foundation, encrypted-vault experiments, node service accounting, deterministic inflation logic and a native Genesis Testnet ledger. It does not yet provide production consensus, production anonymous routing, a production PQ ratchet, mature distributed storage repair, transferable token wallets, production governance, or audited security.
 
 ## 14. Roadmap
 Near-term work: stabilize FREE-013 client authentication/onboarding; run multiple FREE nodes; add peer chain synchronization and validator consensus; add transferable PQ economic wallet transactions beyond the Founder Genesis identity; bind useful-service proofs to on-chain node rewards; implement signed policy/upgrade authorities and timelocks; improve distributed storage durability; then test economic simulations before any real-value token launch. Privacy and user-key sovereignty remain mandatory throughout.
@@ -73,22 +73,33 @@ FREE-013 establishes `free-testnet-2` as a new experimental genesis rather than 
 
 Testnet-2 starts with 500,000,000 FREE. Exactly 75,000,000 FREE (15%) is assigned to the Founder Genesis Economic Identity. The remaining 425,000,000 FREE is held in a protocol-labeled, locked Genesis Reserve and is explicitly **unallocated** pending economic simulation. The reserve is not Founder property. This preserves supply accounting without prematurely fixing the remaining 85% mainnet allocation.
 
-## 16. FREE-017 — usable messenger and independent-node foundation
-FREE-017 shifts the near-term emphasis from token design to user utility and network independence while preserving the Testnet-2 monetary constitution from FREE-013.
+## 16. FREE-018 — usable messenger and independent-node foundation
+FREE-018 shifts the near-term emphasis from token design to user utility and network independence while preserving the Testnet-2 monetary constitution from FREE-013.
 
-The browser messenger keeps Account Identity and message content client-side. A sender encapsulates a fresh ML-KEM-768 shared secret per message, derives an AES-256-GCM key, encrypts the plaintext locally, and signs the encrypted envelope with ML-DSA-65. Relay and federation nodes route ciphertext. FREE-017 also persists public PQ identity cards at the node so a contact can still be resolved after that user disconnects from the relay, and it retains encrypted outgoing wire envelopes locally so messages created while disconnected can be retried after authenticated reconnection. These are usability/durability improvements, not a claim of a production double-ratchet or metadata anonymity.
+The browser messenger keeps Account Identity and message content client-side. A sender encapsulates a fresh ML-KEM-768 shared secret per message, derives an AES-256-GCM key, encrypts the plaintext locally, and signs the encrypted envelope with ML-DSA-65. Relay and federation nodes route ciphertext. FREE-018 also persists public PQ identity cards at the node so a contact can still be resolved after that user disconnects from the relay, and it retains encrypted outgoing wire envelopes locally so messages created while disconnected can be retried after authenticated reconnection. These are usability/durability improvements, not a claim of a production double-ratchet or metadata anonymity.
 
 Independent FREE nodes now authenticate federation hello messages with a persistent ML-DSA-65 node key. The node identifier is derived from the PQ public key, and the signed hello binds node ID, software version, advertised URL, public key and advertised user routes. This prevents an unauthenticated peer from simply choosing another node's identifier in the federation handshake. It does not yet constitute validator consensus, Sybil resistance, anonymous routing or Byzantine finality.
 
-The freedom test remains architectural: no single FREE Inc. relay should be required for the mature network to operate. FREE-017 is a foundation toward that target, not completion of it. Multiple independently operated nodes still need deployment tests, chain synchronization, validator rules, fork choice/finality, service-proof economics and adversarial testing before mainnet claims are justified.
+The freedom test remains architectural: no single FREE Inc. relay should be required for the mature network to operate. FREE-018 is a foundation toward that target, not completion of it. Multiple independently operated nodes still need deployment tests, chain synchronization, validator rules, fork choice/finality, service-proof economics and adversarial testing before mainnet claims are justified.
 
-## Product usability principle — FREE-017
+## Product usability principle — FREE-018
 FREE treats cryptography and decentralization as infrastructure, not onboarding burden. A normal user should be able to create or restore an identity, add a person and exchange encrypted messages without understanding validators, storage proofs, chain state, KEMs or signatures. Advanced network participation remains opt-in and visibly testnet/experimental. This usability separation does not weaken the security boundary: a client that has not completed PQ relay authentication must not present itself as securely connected.
 
 
-### FREE-017 — client reliability milestone (implemented on testnet)
-FREE-017 replaces the experimental hand-written browser WebSocket frame transport with a maintained WebSocket implementation while preserving the post-quantum authentication challenge. Recovery Kit restore is completed locally and transitions directly into the Messenger state after cryptographic integrity checks. A relay connection is not considered authenticated until the ML-DSA-65 challenge signature verifies. These changes improve reliability; they do not change the project claim that production-grade recovery attempt anti-rollback, metadata privacy, multi-validator consensus, and independent security review remain future work.
+### FREE-018 — client reliability milestone (implemented on testnet)
+FREE-018 replaces the experimental hand-written browser WebSocket frame transport with a maintained WebSocket implementation while preserving the post-quantum authentication challenge. Recovery Kit restore is completed locally and transitions directly into the Messenger state after cryptographic integrity checks. A relay connection is not considered authenticated until the ML-DSA-65 challenge signature verifies. These changes improve reliability; they do not change the project claim that production-grade recovery attempt anti-rollback, metadata privacy, multi-validator consensus, and independent security review remain future work.
 
 
-### Implementation status — FREE-017
+### Implementation status — FREE-018
 The messenger client now enforces an explicit single-screen state transition after account recovery and displays the recovered profile identity in the application shell. Browser-to-relay WebSocket admission uses same-origin or explicit allow-list validation before the ML-DSA-65 challenge-response authentication. This is an implementation hardening milestone, not a claim of production security or decentralization.
+
+
+## 17. FREE-018 — private-alpha messaging semantics
+
+After a successful two-browser exchange between independent FREE identities, FREE-018 introduces the minimum conversation semantics expected in a private alpha without changing the cryptographic trust boundary. Incoming messages can increment a local unread count. Opening a conversation marks locally stored incoming messages as read and sends an authenticated read-receipt message containing message IDs to the peer. Sender UI can therefore distinguish delivery from read state.
+
+Read receipts are metadata, not content encryption. Relay or federation infrastructure may observe source/destination identities, timing and message/read-routing events in this testnet architecture. FREE must not market the current system as metadata anonymous. A future privacy-control milestone should make read receipts user-configurable and continue work on private discovery, padding, routing indirection and metadata minimization.
+
+Contact removal deletes the local contact and local conversation history on that client. Blocking is also local-first: the client records the blocked FREE ID and ignores new envelopes or unsolicited contact-card pushes from it. Blocking does not grant FREE Inc. a global account-ban capability and does not destroy the other person's identity.
+
+Mobile navigation now treats a conversation as a distinct interaction state with an explicit back-to-chats control. These changes are product-layer improvements. They do not alter FREE-PQ1, Account Identity, Founder Economic Identity, FREE Chain Testnet-2 Genesis, or the economic constitution.

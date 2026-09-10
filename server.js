@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-017';
+const VERSION = 'FREE-018';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -409,6 +409,7 @@ async function handleClientConnection(socket, req){
         route(msg.to,msg,{queue:false});return;
       }
       if(msg.type==='delivery'&&validId(msg.to)&&validId(msg.from)&&msg.from.toLowerCase()===id&&typeof msg.msgId==='string'){route(msg.to,msg,{queue:true});return}
+      if(msg.type==='read'&&validId(msg.to)&&validId(msg.from)&&msg.from.toLowerCase()===id&&Array.isArray(msg.msgIds)&&msg.msgIds.length<=100&&msg.msgIds.every(x=>typeof x==='string'&&x.length>=8&&x.length<=128)){route(msg.to,{type:'read',from:msg.from,to:msg.to,msgIds:msg.msgIds},{queue:true});return}
     }catch(err){console.warn('client ws error:',err?.message||err);try{socket.close(1011,'server error')}catch{}}
   });
   const cleanup=()=>{clearTimeout(authDeadline);if(id&&clients.get(id)===socket){clients.delete(id);announcePresence(id,false)}if(id)storageNodes.delete(id)};

@@ -5,9 +5,9 @@ const dbName = 'free-v01'; // compatibility container; FREE-007 keeps the same I
 const CRYPTO_SUITE = 'FREE-PQ1';
 const KEM_NAME = 'ML-KEM-768';
 const SIG_NAME = 'ML-DSA-65';
-const APP_VERSION='FREE-016';
+const APP_VERSION='FREE-018';
 let db, me=null, profile=null, ws=null, selectedId=null;
-let contacts={}, chats={}, pendingVault=new Map();
+let contacts={}, chats={}, blockedIds={}, pendingVault=new Map();
 let storageEnabled=false, currentLang='vi', authTimer=null, reconnectTimer=null, connectGeneration=0, nodeServiceId='', nodeCapacityMb=1024;
 const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const unb64 = str => Uint8Array.from(atob(str), c => c.charCodeAt(0));
@@ -48,7 +48,37 @@ async function signObject(obj){return pq().sign(enc.encode(JSON.stringify(obj)),
 async function verifyObject(obj,signature,sigPublicKey){try{return pq().verify(signature,enc.encode(JSON.stringify(obj)),sigPublicKey)}catch{return false}}
 async function messageKey(sharedSecret,from,to,msgId){const base=await crypto.subtle.importKey('raw',unb64(sharedSecret),'HKDF',false,['deriveKey']);return crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-512',salt:enc.encode('FREE-PQ1-MESSAGE'),info:enc.encode(`${from}:${to}:${msgId}`)},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
 function aadFor(from,to,msgId,sentAt,kemCiphertext){return enc.encode(JSON.stringify({suite:CRYPTO_SUITE,from,to,msgId,sentAt,kemCiphertext}))}
-async function saveState(){await setKV('contacts',contacts);await setKV('chats',chats);await setKV('storageEnabled',storageEnabled)}
+async function saveState(){await setKV('contacts',contacts);await setKV('chats',chats);await setKV('blockedIds',blockedIds);await setKV('storageEnabled',storageEnabled)}
+function unreadCount(id){return (chats[id]||[]).filter(m=>m.from===id&&!m.readAt).length}
+async function markConversationRead(id){
+ if(!id||!contacts[id])return;
+ const ids=[]; for(const m of chats[id]||[]){if(m.from===id&&!m.readAt){m.readAt=Date.now();ids.push(m.msgId)}}
+ if(ids.length&&ws?.readyState===1)ws.send(JSON.stringify({type:'read',from:me.id,to:id,msgIds:ids.slice(-100)}));
+ if(ids.length){await saveState();renderContacts();renderChat()}
+}
+function renderBlocked(){
+ const box=$('#blockedList'); if(!box)return; box.innerHTML='';
+ const ids=Object.keys(blockedIds||{});
+ if(!ids.length){box.innerHTML='<div class="mini">Không có tài khoản bị chặn.</div>';return}
+ for(const id of ids){
+   const row=document.createElement('div'); row.className='blocked-row';
+   row.innerHTML=`<div><strong>${esc(blockedIds[id]?.name||blockedIds[id]?.shortId||id.slice(0,12))}</strong><small>${esc(blockedIds[id]?.shortId||id)}</small></div><button class="btn ghost" type="button">Bỏ chặn</button>`;
+   row.querySelector('button').onclick=async()=>{delete blockedIds[id];await saveState();renderBlocked()};
+   box.appendChild(row);
+ }
+}
+async function removeSelectedContact(){
+ if(!selectedId||!contacts[selectedId])return;
+ const name=contacts[selectedId].name||contacts[selectedId].displayName||contacts[selectedId].shortId;
+ if(!confirm(currentLang==='vi'?`Xóa ${name} khỏi danh bạ? Lịch sử chat cục bộ cũng sẽ bị xóa.`:`Remove ${name}? Local chat history will also be deleted.`))return;
+ delete contacts[selectedId];delete chats[selectedId];selectedId=null;await saveState();renderContacts();renderChat()
+}
+async function blockSelectedContact(){
+ if(!selectedId||!contacts[selectedId])return;
+ const c=contacts[selectedId],id=selectedId,name=c.name||c.displayName||c.shortId;
+ if(!confirm(currentLang==='vi'?`Chặn ${name}? FREE sẽ bỏ qua tin nhắn mới từ ID này trên thiết bị này.`:`Block ${name}? FREE will ignore new messages from this ID on this device.`))return;
+ blockedIds[id]={name,shortId:c.shortId,blockedAt:Date.now()};delete contacts[id];delete chats[id];selectedId=null;await saveState();renderContacts();renderChat();renderBlocked()
+}
 function validPin(pin){return /^\d{4,6}$/.test(pin)}
 async function deriveAccountRecoveryKey(secret,pin,salt){const material=new Uint8Array(secret.length+pin.length);material.set(secret);material.set(enc.encode(pin),secret.length);const base=await crypto.subtle.importKey('raw',material,'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',hash:'SHA-512',salt,iterations:600000},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
 async function buildAccountRecoveryKit(pin,secretOverride=null){if(!validPin(pin))throw new Error(currentLang==='vi'?'PIN phải gồm 4–6 chữ số.':'PIN must contain 4–6 digits.');const secret=secretOverride||crypto.getRandomValues(new Uint8Array(32)),salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));const key=await deriveAccountRecoveryKey(secret,pin,salt);const payload={format:'FREE-ACCOUNT-1',identity:me.raw,profile,contacts,chats,createdAt:Date.now()};const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,enc.encode(JSON.stringify(payload))));const kit={v:1,suite:CRYPTO_SUITE,salt:b64url(salt),iv:b64url(iv),secret:b64url(secret),ciphertext:b64url(ct)};return 'FREE-RK1.'+b64url(enc.encode(JSON.stringify(kit)))}
@@ -58,15 +88,15 @@ async function saveNewAccountKit(pin){const kit=await buildAccountRecoveryKit(pi
 function downloadText(name,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function inviteLink(){return `${location.origin}/#freeid=${me.id}`}
 function renderIdentity(){if(!me)return;const link=inviteLink(),name=profile?.displayName||'FREE';$('#myId').textContent=me.id;$('#shortId').textContent=me.shortId;$('#displayNameHeading').textContent=name;$('#profileName').value=name;$('#inviteLink').value=link;$('#qr').src=`/api/qr?text=${encodeURIComponent(link)}`;if($('#headerName'))$('#headerName').textContent=name;if($('#headerShortId'))$('#headerShortId').textContent=me.shortId;if($('#settingsName'))$('#settingsName').textContent=name;if($('#settingsShortId'))$('#settingsShortId').textContent=me.shortId;const kit=$('#accountRecoveryKit');if(kit)getKV('accountRecoveryKit').then(v=>{if(v)kit.value=v})}
-function renderContacts(){const box=$('#contacts');if(!box)return;box.innerHTML='';const ids=Object.keys(contacts);if(!ids.length){box.innerHTML=`<div class="muted empty">${esc(t('noContacts'))}</div>`;return}for(const id of ids){const c=contacts[id],b=document.createElement('button');b.className='contact'+(id===selectedId?' active':'');b.innerHTML=`<strong>${esc(c.name||c.displayName||'FREE '+(c.shortId||id.slice(0,10)))}</strong><span>${esc(c.shortId||id)}</span>`;b.onclick=()=>{selectedId=id;renderContacts();renderChat();sendReadDeliveries(id)};box.appendChild(b)}}
-function renderChat(){const title=$('#chatTitle'),msgs=$('#messages'),composer=$('#composer');if(!title||!msgs||!composer)return;if(!selectedId||!contacts[selectedId]){title.textContent=t('selectContact');msgs.innerHTML=`<div class="muted empty">${esc(t('chooseContact'))}</div>`;composer.hidden=true;return}title.textContent=contacts[selectedId].name||contacts[selectedId].displayName||`FREE ${contacts[selectedId].shortId||selectedId.slice(0,10)}`;composer.hidden=false;msgs.innerHTML='';for(const m of chats[selectedId]||[]){const d=document.createElement('div');d.className='msg '+(m.from===me.id?'mine':'theirs');const st=m.from===me.id?`<small>${esc(m.status||'sent')}</small>`:'';d.innerHTML=`<div>${esc(m.text)}</div><time>${new Date(m.sentAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</time>${st}`;msgs.appendChild(d)}msgs.scrollTop=msgs.scrollHeight}
+function renderContacts(){const box=$('#contacts');if(!box)return;box.innerHTML='';const ids=Object.keys(contacts);if(!ids.length){box.innerHTML=`<div class="muted empty">${esc(t('noContacts'))}</div>`;return}for(const id of ids){const c=contacts[id],b=document.createElement('button'),n=unreadCount(id);b.className='contact'+(id===selectedId?' active':'');b.innerHTML=`<div class="contact-copy"><strong>${esc(c.name||c.displayName||'FREE '+(c.shortId||id.slice(0,10)))}</strong><span>${esc(c.shortId||id)}</span></div>${n?`<b class="unread-badge">${n>99?'99+':n}</b>`:''}`;b.onclick=()=>{selectedId=id;renderContacts();renderChat();document.querySelector('.messenger-layout')?.classList.add('chat-open');markConversationRead(id)};box.appendChild(b)}}
+function renderChat(){const title=$('#chatTitle'),msgs=$('#messages'),composer=$('#composer');if(!title||!msgs||!composer)return;if(!selectedId||!contacts[selectedId]){title.textContent=t('selectContact');$('#chatActions')?.setAttribute('hidden','');msgs.innerHTML=`<div class="muted empty">${esc(t('chooseContact'))}</div>`;composer.hidden=true;return}title.textContent=contacts[selectedId].name||contacts[selectedId].displayName||`FREE ${contacts[selectedId].shortId||selectedId.slice(0,10)}`;$('#chatActions')?.removeAttribute('hidden');composer.hidden=false;msgs.innerHTML='';for(const m of chats[selectedId]||[]){const d=document.createElement('div');d.className='msg '+(m.from===me.id?'mine':'theirs');const st=m.from===me.id?`<small>${esc(m.status||'sent')}</small>`:'';d.innerHTML=`<div>${esc(m.text)}</div><time>${new Date(m.sentAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</time>${st}`;msgs.appendChild(d)}msgs.scrollTop=msgs.scrollHeight}
 function status(text,good=true){const e=$('#status');if(!e)return;e.textContent=text;e.dataset.good=good?'1':'0'}
 function updateStorageText(){const e=$('#storageState');if(e)e.textContent=storageEnabled?t('storageOn'):t('storageOff')}
 function renderService(x){if(!x)return;$('#testCredits').textContent=Number(x.credits||0).toFixed(3);$('#serviceStats').textContent=`${Number(x.storedBytes||0).toLocaleString()} bytes · ${x.receipts||0} receipts · capacity ${x.capacityMb||0} MB`;}
 function showStep(id){['welcomeStep','createStep','recoveryStep','createdStep'].forEach(x=>$('#'+x).hidden=x!==id)}
-function showApp(){const onboarding=$('#onboarding'),app=$('#appShell');onboarding.hidden=true;onboarding.setAttribute('aria-hidden','true');app.hidden=false;app.removeAttribute('aria-hidden');document.body.classList.add('in-app');window.scrollTo(0,0);showView('chatsView');renderIdentity();renderContacts();renderChat();connect()}
+function showApp(){const onboarding=$('#onboarding'),app=$('#appShell');onboarding.hidden=true;onboarding.setAttribute('aria-hidden','true');app.hidden=false;app.removeAttribute('aria-hidden');document.body.classList.add('in-app');window.scrollTo(0,0);showView('chatsView');renderIdentity();renderContacts();renderChat();renderBlocked();connect()}
 function showView(id){document.querySelectorAll('.app-view').forEach(v=>{v.hidden=v.id!==id;v.classList.toggle('active-view',v.id===id)});document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===id));window.scrollTo({top:0,left:0,behavior:'instant'});if(id==='settingsView'){const a=$('#displayNameHeading'),b=$('#shortId');if($('#settingsName'))$('#settingsName').textContent=a?.textContent||profile?.name||'FREE';if($('#settingsShortId'))$('#settingsShortId').textContent=b?.textContent||shortId(me?.id||'')} }
-async function addContactCard(card,name){if(!(await validateCard(card)))throw new Error('Invalid or non-PQ FREE identity');if(card.id===me.id)throw new Error('This is your own identity');contacts[card.id]={...card,name:name||card.displayName||contacts[card.id]?.name||`FREE ${card.shortId||card.id.slice(0,10)}`};await saveState();renderContacts();return contacts[card.id]}
+async function addContactCard(card,name){if(!(await validateCard(card)))throw new Error('Invalid or non-PQ FREE identity');if(card.id===me.id)throw new Error('This is your own identity');delete blockedIds[card.id];contacts[card.id]={...card,name:name||card.displayName||contacts[card.id]?.name||`FREE ${card.shortId||card.id.slice(0,10)}`};await saveState();renderContacts();return contacts[card.id]}
 async function fetchCardById(id){if(!/^[a-f0-9]{64}$/i.test(id))throw new Error('Invalid FREE full identity');const r=await fetch(`/api/card?id=${encodeURIComponent(id)}`,{cache:'no-store'});if(!r.ok)throw new Error('Identity is not currently published on this relay');const card=await r.json();if(!(await validateCard(card))||card.id.toLowerCase()!==id.toLowerCase())throw new Error('Relay returned an invalid identity card');return card}
 async function parseInvite(input){const raw=input.trim();let id='';try{const u=new URL(raw,location.origin);id=(u.hash.match(/#freeid=([a-f0-9]{64})/i)||[])[1]||''}catch{}if(!id&&/^[a-f0-9]{64}$/i.test(raw))id=raw;if(!id)throw new Error('Paste a FREE-PQ invite link or full FREE identity');return fetchCardById(id.toLowerCase())}
 async function addFromInvite(input){const card=await parseInvite(input);await addContactCard(card);selectedId=card.id;renderContacts();renderChat();if(ws?.readyState===1){const mine=cardForMe();const signature=await signObject(mine);ws.send(JSON.stringify({type:'contact-card',from:me.id,to:card.id,card:mine,signature}))}return card}
@@ -89,7 +119,9 @@ async function handleWs(msg,sock=ws){
   if(msg.type==='auth-error'){clearTimeout(authTimer);status(`${t('authFailed')}${msg.reason?' · '+msg.reason:''}`,false);return}
   if(msg.type==='ack'){for(const id of Object.keys(chats)){const m=(chats[id]||[]).find(x=>x.msgId===msg.msgId);if(m){m.status=msg.queued?'queued':'sent';await saveState();if(id===selectedId)renderChat();break}}return}
   if(msg.type==='delivery'){for(const id of Object.keys(chats)){const m=(chats[id]||[]).find(x=>x.msgId===msg.msgId);if(m){m.status='delivered';await saveState();if(id===selectedId)renderChat();break}}return}
+  if(msg.type==='read'){const ids=new Set(Array.isArray(msg.msgIds)?msg.msgIds:[]);for(const cid of Object.keys(chats)){let changed=false;for(const m of chats[cid]||[]){if(m.from===me.id&&ids.has(m.msgId)){m.status='read';changed=true}}if(changed){await saveState();if(cid===selectedId)renderChat()}}return}
   if(msg.type==='contact-card'){
+    if(blockedIds?.[msg.from])return;
     const ok=(await validateCard(msg.card))&&await verifyObject(msg.card,msg.signature,msg.card.sigPublicKey);if(ok&&msg.card.id===msg.from){await addContactCard(msg.card);renderContacts()}
     return;
   }
@@ -110,11 +142,11 @@ async function sendMessage(text){
 }
 async function resendOutbox(){if(ws?.readyState!==1)return;let changed=false;for(const id of Object.keys(chats)){for(const m of chats[id]||[]){if(m.from===me.id&&m.wire&&['offline','sending'].includes(m.status)){ws.send(JSON.stringify(m.wire));m.status='sending';changed=true}}}if(changed){await saveState();renderChat()}}
 async function receiveEnvelope(msg){
+  if(blockedIds?.[msg.from])return;
   const c=contacts[msg.from];if(!c||c.cryptoSuite!==CRYPTO_SUITE)return;const p=msg.payload;if(p.suite!==CRYPTO_SUITE||p.from!==msg.from||p.to!==msg.to)return;
   const signable={suite:p.suite,from:p.from,to:p.to,msgId:p.msgId,sentAt:p.sentAt,kemCiphertext:p.kemCiphertext,iv:p.iv,ciphertext:p.ciphertext};const ok=await verifyObject(signable,p.signature,c.sigPublicKey);if(!ok)return;
-  try{const shared=pq().decapsulate(p.kemCiphertext,me.kemSecretKey);const key=await messageKey(shared,p.from,p.to,p.msgId);const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(p.iv),additionalData:aadFor(p.from,p.to,p.msgId,p.sentAt,p.kemCiphertext)},key,unb64(p.ciphertext));chats[msg.from]=chats[msg.from]||[];if(!chats[msg.from].some(x=>x.msgId===p.msgId))chats[msg.from].push({msgId:p.msgId,from:msg.from,to:me.id,text:dec.decode(plain),sentAt:p.sentAt,status:'received',suite:CRYPTO_SUITE});await saveState();if(selectedId===msg.from)renderChat();if(ws?.readyState===1)ws.send(JSON.stringify({type:'delivery',from:me.id,to:msg.from,msgId:p.msgId}))}catch(e){console.warn('PQ decrypt failed',e)}
+  try{const shared=pq().decapsulate(p.kemCiphertext,me.kemSecretKey);const key=await messageKey(shared,p.from,p.to,p.msgId);const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(p.iv),additionalData:aadFor(p.from,p.to,p.msgId,p.sentAt,p.kemCiphertext)},key,unb64(p.ciphertext));chats[msg.from]=chats[msg.from]||[];if(!chats[msg.from].some(x=>x.msgId===p.msgId))chats[msg.from].push({msgId:p.msgId,from:msg.from,to:me.id,text:dec.decode(plain),sentAt:p.sentAt,status:'received',suite:CRYPTO_SUITE});await saveState();if(selectedId===msg.from){renderChat();await markConversationRead(msg.from)}else renderContacts();if(ws?.readyState===1)ws.send(JSON.stringify({type:'delivery',from:me.id,to:msg.from,msgId:p.msgId}))}catch(e){console.warn('PQ decrypt failed',e)}
 }
-async function sendReadDeliveries(){/* reserved for a later protocol version */}
 
 // ---- Distributed encrypted vault (experimental) ----
 function gfMul(a,b){let p=0;for(let i=0;i<8;i++){if(b&1)p^=a;const hi=a&0x80;a=(a<<1)&255;if(hi)a^=0x1b;b>>=1}return p}
@@ -177,11 +209,11 @@ async function restoreAccountFromKit(){
 
 async function refreshChain(){try{const r=await fetch('/api/chain',{cache:'no-store'});if(!r.ok)return;const c=await r.json();$('#chainHeight').textContent=String(c.height??0);$('#founderAddress').textContent=c.addresses?.founder||'—';$('#founderBalance').textContent=`${Number(c.balances?.founder||0).toFixed(6)} FREE`;$('#genesisHash').textContent=c.genesisHash||'—';$('#latestBlockHash').textContent=c.latestBlockHash||'—';const secs=Math.max(0,Math.ceil((Number(c.nextEpochAt||0)-Date.now())/1000));$('#chainNextEpoch').textContent=`Testnet · reward epoch tiếp theo ~ ${secs}s`; }catch(e){console.warn('chain status',e)}}
 function bootReady(){const b=$('#bootFallback');if(b)b.hidden=true}
-function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');b.querySelector('span').textContent=`FREE-017 không khởi động được: ${e?.message||e}`;b.querySelector('small').textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
+function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');b.querySelector('span').textContent=`FREE-018 không khởi động được: ${e?.message||e}`;b.querySelector('small').textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
 
 async function init(){
  currentLang=localStorage.getItem('free-lang')||((navigator.language||'').toLowerCase().startsWith('vi')?'vi':'en');setLanguage(currentLang);db=await openDB();
- const raw=await getKV('identity');profile=await getKV('profile');contacts=await getKV('contacts')||{};chats=await getKV('chats')||{};storageEnabled=!!(await getKV('storageEnabled'));nodeServiceId=await getKV('nodeServiceId');if(!nodeServiceId){nodeServiceId=[...crypto.getRandomValues(new Uint8Array(24))].map(x=>x.toString(16).padStart(2,'0')).join('');await setKV('nodeServiceId',nodeServiceId)}nodeCapacityMb=Number(await getKV('nodeCapacityMb'))||1024;$('#nodeServiceId').textContent=nodeServiceId;$('#nodeCapacity').value=String(nodeCapacityMb);$('#storageToggle').checked=storageEnabled;updateStorageText();
+ const raw=await getKV('identity');profile=await getKV('profile');contacts=await getKV('contacts')||{};chats=await getKV('chats')||{};blockedIds=await getKV('blockedIds')||{};storageEnabled=!!(await getKV('storageEnabled'));nodeServiceId=await getKV('nodeServiceId');if(!nodeServiceId){nodeServiceId=[...crypto.getRandomValues(new Uint8Array(24))].map(x=>x.toString(16).padStart(2,'0')).join('');await setKV('nodeServiceId',nodeServiceId)}nodeCapacityMb=Number(await getKV('nodeCapacityMb'))||1024;$('#nodeServiceId').textContent=nodeServiceId;$('#nodeCapacity').value=String(nodeCapacityMb);$('#storageToggle').checked=storageEnabled;updateStorageText();
  if(raw?.cryptoSuite===CRYPTO_SUITE){me=wrapIdentity(raw);if(!profile){$('#onboarding').hidden=false;showStep('createStep');$('#newName').value='';}else{showApp();const kit=await getKV('accountRecoveryKit');if(kit)$('#accountRecoveryKit').value=kit}}
  else{$('#onboarding').hidden=false;showStep('welcomeStep')}
  const hash=location.hash;if(me&&profile&&hash.startsWith('#freeid=')){try{await addFromInvite(location.href);history.replaceState(null,'',location.pathname)}catch(e){alert(e.message)}}
@@ -202,6 +234,8 @@ $('#copyInvite').onclick=async()=>{await navigator.clipboard.writeText(inviteLin
 $('#shareInvite').onclick=async()=>{const url=inviteLink();if(navigator.share)await navigator.share({title:'FREE identity',text:`${profile?.displayName||'FREE'} · ${me.shortId}`,url});else{await navigator.clipboard.writeText(url);alert(currentLang==='vi'?'Đã sao chép liên kết.':'Invite link copied.')}};
 $('#addContact').onclick=async()=>{try{await addFromInvite($('#inviteInput').value);$('#inviteInput').value=''}catch(e){alert(e.message)}};
 $('#composer').onsubmit=async e=>{e.preventDefault();const input=$('#messageInput'),text=input.value.trim();if(!text)return;input.value='';try{await sendMessage(text)}catch(err){alert(err.message)}};
+$('#removeContactBtn').onclick=()=>removeSelectedContact();$('#blockContactBtn').onclick=()=>blockSelectedContact();
+$('#backToChatsBtn').onclick=()=>{document.querySelector('.messenger-layout')?.classList.remove('chat-open');selectedId=null;renderContacts();renderChat()};
 $('#storageToggle').onchange=toggleStorage;$('#nodeCapacity').onchange=async()=>{nodeCapacityMb=Math.max(100,Math.min(102400,Number($('#nodeCapacity').value)||1024));await setKV('nodeCapacityMb',nodeCapacityMb);if(storageEnabled&&ws?.readyState===1)ws.send(JSON.stringify({type:'storage-advertise',enabled:true,nodeId:nodeServiceId,capacityMb:nodeCapacityMb}))};$('#backupBtn').onclick=()=>createVault().catch(e=>{alert(e.message);$('#vaultProgress').textContent=e.message;$('#backupBtn').disabled=false});$('#restoreBtn').onclick=()=>restoreVault().catch(e=>{alert(e.message);$('#vaultProgress').textContent=e.message});$('#copyKit').onclick=async()=>navigator.clipboard.writeText($('#recoveryKit').value);
 document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>showView(b.dataset.view));const ncb=$('#newChatBtn');if(ncb)ncb.onclick=()=>showView('peopleView');const sip=$('#shareInvite');if(sip)sip.onclick=()=>{const p=$('#sharePanel');if(p)p.hidden=!p.hidden};
 init().catch(e=>{console.error(e);status('startup error',false);bootError(e)});
