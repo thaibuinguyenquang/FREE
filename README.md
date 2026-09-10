@@ -1,4 +1,4 @@
-# FREE-026 — Private Alpha Messenger
+# FREE-028 — Private Alpha Messenger
 
 FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-023 advances the usable post-quantum messenger while preserving **FREE Chain Freedom Economy Testnet-2** while preserving the FREE-PQ1 communication path and the rule that user secrets never belong to the chain or founder.
 
@@ -87,13 +87,25 @@ New accounts use a compact Recovery Address plus Recovery Secret and PIN. The re
 - Testnet limitation: because restored browser clients still possess the Account Identity secret key, this is not yet hardware-rooted theft resistance; production design requires device-scoped credentials plus root-key isolation/rotation.
 
 
-## FREE-026 — Whitepaper Web
-FREE-026 adds `/whitepaper`, a dedicated reader generated from the single living `WHITEPAPER.md` source. It includes fixed contents navigation, an on-page outline, reading progress, implementation-status legend, responsive mobile navigation and a Copy Markdown action. The website does not fork or duplicate the Whitepaper content.
+## FREE-027 — Whitepaper Web
+FREE-027 adds `/whitepaper`, a dedicated reader generated from the single living `WHITEPAPER.md` source. It includes fixed contents navigation, an on-page outline, reading progress, implementation-status legend, responsive mobile navigation and a Copy Markdown action. The website does not fork or duplicate the Whitepaper content.
 
 
-## FREE-026 — Encrypted Account Vault Sync
-FREE-026 adds an opaque encrypted account-vault sync surface for contacts, conversation state and encrypted message-history snapshots. The relay stores ciphertext only. Vault encryption is derived from the local Recovery Secret plus the account PQ private signing material, so a server-side recovery-address leak alone is not sufficient to decrypt the vault. Sync merges by message ID before upload. Existing data that was already lost before FREE-026 cannot be reconstructed unless another device still retains it.
+## FREE-027 — Encrypted Account Vault Sync
+FREE-027 adds an opaque encrypted account-vault sync surface for contacts, conversation state and encrypted message-history snapshots. The relay stores ciphertext only. Vault encryption is derived from the local Recovery Secret plus the account PQ private signing material, so a server-side recovery-address leak alone is not sufficient to decrypt the vault. Sync merges by message ID before upload. Existing data that was already lost before FREE-027 cannot be reconstructed unless another device still retains it.
 
 
-## FREE-026 — Messenger transport and viewport hardening
-FREE-026 fixes two private-alpha blockers found during live browser testing. The Messenger now occupies the available viewport instead of extending the composer below the browser window, so sending messages does not require browser zoom. New envelopes carry only the sender's public self-certifying FREE-PQ identity card; a restored device with an empty local contact list can validate that card from the full FREE ID, verify the ML-DSA-65 envelope signature, add the sender locally, decrypt the message, and return delivery acknowledgement. The relay also enriches envelopes with the already-authenticated public card when available, including queued delivery. No private key, Recovery Secret, PIN or plaintext message is added to the relay envelope.
+## FREE-027 — Messenger transport and viewport hardening
+FREE-027 fixes two private-alpha blockers found during live browser testing. The Messenger now occupies the available viewport instead of extending the composer below the browser window, so sending messages does not require browser zoom. New envelopes carry only the sender's public self-certifying FREE-PQ identity card; a restored device with an empty local contact list can validate that card from the full FREE ID, verify the ML-DSA-65 envelope signature, add the sender locally, decrypt the message, and return delivery acknowledgement. The relay also enriches envelopes with the already-authenticated public card when available, including queued delivery. No private key, Recovery Secret, PIN or plaintext message is added to the relay envelope.
+
+
+## FREE-027 — continuity guard and desktop restore polish
+FREE-027 hardens account-vault continuity after live multi-browser testing. A device must hydrate the latest encrypted remote vault before it may publish a new snapshot. If a remote vault exists but cannot be decrypted, the client refuses to overwrite it. Local encrypted-account state also keeps an account-scoped safety snapshot in IndexedDB to recover from accidental local UI/state regression. Cross-device merge remains message-ID based and ciphertext-only on the relay. Historical messages that had already disappeared before a surviving FREE-026/027 device or server vault retained them cannot be reconstructed.
+
+Desktop Compact Recovery now accepts Enter from Recovery Address, Recovery Secret, or PIN; clicking the Restore button is no longer required. Onboarding, restore completion and in-app view changes use short native transitions while respecting reduced-motion preferences.
+
+
+## FREE-028 — Distributed Storage v1
+FREE-028 begins moving long-term message history out of the device-as-archive model. Each message is re-encrypted on-device under an account-owned archive key derived from the PQ account secret material, stored as a content-addressed ciphertext chunk, and indexed by an account manifest. The current relay can act as a professional testnet storage gateway; it never receives archive plaintext or the archive key. After a positive storage receipt, the browser may bound each conversation cache to the most recent 250 messages. On a restored device, FREE requests the archive manifest and hydrates the most recent 500 archived messages, merging by message ID.
+
+This is a **testnet storage implementation**, not production Proof of Useful Service. The content-addressed receipt proves that the gateway accepted a specific ciphertext chunk. Independent challenge sampling, replication/erasure repair, anti-Sybil accounting, validator settlement and slashing are still roadmap work. Messages, media and archive ciphertext are not placed on FREE Chain.

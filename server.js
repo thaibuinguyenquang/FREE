@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-026';
+const VERSION = 'FREE-028';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -15,7 +15,12 @@ const freeChain = new FreeChain({dataDir: DATA_DIR, pqModule, version: VERSION})
 const QUEUE_FILE = path.join(DATA_DIR, 'offline-queue.json');
 const RECOVERY_DIR = path.join(DATA_DIR, 'recovery-capsules');
 const ACCOUNT_VAULT_DIR = path.join(DATA_DIR, 'account-vaults');
+const ARCHIVE_CHUNK_DIR = path.join(DATA_DIR, 'storage-chunks');
+const ARCHIVE_MANIFEST_DIR = path.join(DATA_DIR, 'storage-manifests');
 fs.mkdirSync(RECOVERY_DIR, { recursive: true });
+fs.mkdirSync(ACCOUNT_VAULT_DIR, { recursive: true });
+fs.mkdirSync(ARCHIVE_CHUNK_DIR, { recursive: true });
+fs.mkdirSync(ARCHIVE_MANIFEST_DIR, { recursive: true });
 const MAX_FRAME_BYTES = Number(process.env.MAX_FRAME_BYTES || 1024 * 1024);
 const MAX_QUEUE_PER_ID = Number(process.env.MAX_QUEUE_PER_ID || 500);
 const QUEUE_TTL_MS = Number(process.env.QUEUE_TTL_MS || 7 * 24 * 60 * 60 * 1000);
@@ -335,6 +340,12 @@ function validRecoveryAddress(x){return /^FR-[A-Z2-7]{4}(?:-[A-Z2-7]{4}){4}$/.te
 function recoveryFile(address){return path.join(RECOVERY_DIR,address.replace(/-/g,'')+'.json')}
 function accountVaultFile(address){return path.join(ACCOUNT_VAULT_DIR,address.replace(/-/g,'')+'.json')}
 function validVaultBlob(x){return x&&x.v===1&&x.suite==='FREE-PQ1'&&validRecoveryAddress(x.address)&&validId(x.accountId)&&Number.isFinite(Number(x.revision))&&Number(x.revision)>=0&&typeof x.iv==='string'&&x.iv.length<256&&typeof x.ciphertext==='string'&&x.ciphertext.length<=1200000&&typeof x.signature==='string'&&x.signature.length<12000}
+function archiveChunkFile(cid){return path.join(ARCHIVE_CHUNK_DIR,cid.toLowerCase()+'.blob')}
+function archiveManifestFile(id){return path.join(ARCHIVE_MANIFEST_DIR,id.toLowerCase()+'.json')}
+function readArchiveManifest(id){try{return JSON.parse(fs.readFileSync(archiveManifestFile(id),'utf8'))}catch{return {v:1,accountId:id,items:[],updatedAt:0}}}
+function saveArchiveManifest(m){atomicWriteJson(archiveManifestFile(m.accountId),m)}
+function archiveStats(){let chunks=0,bytes=0;try{for(const f of fs.readdirSync(ARCHIVE_CHUNK_DIR)){if(!f.endsWith('.blob'))continue;chunks++;bytes+=fs.statSync(path.join(ARCHIVE_CHUNK_DIR,f)).size}}catch{}return{chunks,bytes}}
+
 const server = http.createServer(async (req,res)=>{
   securityHeaders(res);
   const ip=clientIp(req);
@@ -354,7 +365,7 @@ const server = http.createServer(async (req,res)=>{
     }
     if(url.pathname==='/health'){
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:connectedSocketCount(),connectedAccounts:[...clients.keys()].filter(accountOnline).length,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',clientAuth:'ML-DSA-65',clientWebSocket:'ws-library',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size}));
+      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:connectedSocketCount(),connectedAccounts:[...clients.keys()].filter(accountOnline).length,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',clientAuth:'ML-DSA-65',clientWebSocket:'ws-library',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size,encryptedArchive:archiveStats()}));
     }
     if(url.pathname==='/api/recovery-capsule'){
       const address=String(url.searchParams.get('address')||'').toUpperCase();
@@ -387,7 +398,7 @@ const server = http.createServer(async (req,res)=>{
         if(!(await verifyPqSignatureBytes(body.signature,bytes,card.sigPublicKey))){res.writeHead(403,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid vault signature'}))}
         let prev=null;try{prev=JSON.parse(fs.readFileSync(accountVaultFile(address),'utf8'))}catch{}
         if(prev&&prev.accountId!==body.accountId){res.writeHead(409,{'content-type':'application/json'});return res.end(JSON.stringify({error:'vault address already bound'}))}
-        if(prev&&Number(body.revision)<Number(prev.revision||0)){res.writeHead(409,{'content-type':'application/json'});return res.end(JSON.stringify({error:'stale revision',revision:prev.revision}))}
+        if(prev&&Number(body.revision)<=Number(prev.revision||0)){res.writeHead(409,{'content-type':'application/json'});return res.end(JSON.stringify({error:'stale revision',revision:prev.revision}))}
         atomicWriteJson(accountVaultFile(address),{v:1,suite:'FREE-PQ1',address,accountId:body.accountId,revision:Number(body.revision),iv:body.iv,ciphertext:body.ciphertext,signature:body.signature,updatedAt:Date.now()});
         res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,address,revision:Number(body.revision)}))
       }
@@ -404,7 +415,7 @@ const server = http.createServer(async (req,res)=>{
     if(url.pathname==='/api/network'){
       const services=[...nodeServices.values()].map(publicService);
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({version:VERSION,economy:publicEconomy(),serviceAccounting:{name:'FREE Test Credits',monetaryValue:false,storageNodes:storageNodes.size,contributingNodes:services.length,totalStoredBytes:services.reduce((n,x)=>n+x.storedBytes,0),totalCredits:Number(services.reduce((n,x)=>n+x.credits,0).toFixed(6))}}));
+      return res.end(JSON.stringify({version:VERSION,economy:publicEconomy(),serviceAccounting:{name:'FREE Test Credits',monetaryValue:false,storageNodes:storageNodes.size,contributingNodes:services.length,totalStoredBytes:services.reduce((n,x)=>n+x.storedBytes,0),totalCredits:Number(services.reduce((n,x)=>n+x.credits,0).toFixed(6)),professionalGateway:archiveStats()}}));
     }
     if(url.pathname==='/api/chain'){
       await freeChain.settle();
@@ -476,6 +487,20 @@ async function handleClientConnection(socket, req){
         wsSend(socket,{type:'storage-status',enabled:storageNodes.has(id),available:storageNodes.size,service:svc?publicService(svc):null});return;
       }
       if(msg.type==='device-list-request'){broadcastDeviceList(id);return}
+      if(msg.type==='archive-manifest-request'){
+        const m=readArchiveManifest(id);wsSend(socket,{type:'archive-manifest',items:m.items||[],updatedAt:m.updatedAt||0});return;
+      }
+      if(msg.type==='archive-get'&&validCid(msg.cid)){
+        const m=readArchiveManifest(id);if(!(m.items||[]).some(x=>x.cid===msg.cid)){wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'chunk-not-owned'});return}
+        try{const ciphertext=fs.readFileSync(archiveChunkFile(msg.cid),'utf8');wsSend(socket,{type:'archive-chunk',requestId:msg.requestId,cid:msg.cid,ciphertext})}catch{wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'chunk-missing'})}return;
+      }
+      if(msg.type==='archive-put'&&validCid(msg.cid)&&typeof msg.ciphertext==='string'&&msg.ciphertext.length<=900000&&typeof msg.msgId==='string'&&msg.msgId.length<=128&&typeof msg.signature==='string'){
+        const raw=Buffer.from(msg.ciphertext,'base64');const cid=crypto.createHash('sha256').update(raw).digest('hex');if(cid!==msg.cid.toLowerCase()){wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'cid-mismatch'});return}
+        const bytes=Buffer.from(`FREE-ARCHIVE-PUT-1:${id}:${msg.msgId}:${msg.cid}:${raw.length}`,'utf8');const card=contactCards.get(id);if(!card||!(await verifyPqSignatureBytes(msg.signature,bytes,card.sigPublicKey))){wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'signature-invalid'});return}
+        if(!fs.existsSync(archiveChunkFile(msg.cid)))fs.writeFileSync(archiveChunkFile(msg.cid),msg.ciphertext,'utf8');
+        const m=readArchiveManifest(id);if(!(m.items||[]).some(x=>x.msgId===msg.msgId)){m.items=(m.items||[]).concat([{msgId:msg.msgId,cid:msg.cid,bytes:raw.length,storedAt:Date.now()}]).slice(-50000);m.updatedAt=Date.now();saveArchiveManifest(m)}
+        wsSend(socket,{type:'archive-stored',requestId:msg.requestId,msgId:msg.msgId,cid:msg.cid,bytes:raw.length,proof:'content-addressed-ciphertext-receipt'});return;
+      }
       if(msg.type==='device-revoke'&&validDeviceId(msg.targetDeviceId)&&msg.targetDeviceId!==deviceId&&typeof msg.signature==='string'){const bytes=Buffer.from(`FREE-DEVICE-REVOKE-1:${id}:${msg.targetDeviceId}`,'utf8');if(!(await verifyPqSignatureBytes(msg.signature,bytes,contactCards.get(id)?.sigPublicKey||''))){wsSend(socket,{type:'device-error',reason:'revoke-signature-invalid'});return}deviceRegistry[id]=deviceRegistry[id]||{};const d=deviceRegistry[id][msg.targetDeviceId]||{authorizedAt:0,lastSeen:0};d.revokedAt=Date.now();deviceRegistry[id][msg.targetDeviceId]=d;saveDevices();const target=accountSockets(id).get(msg.targetDeviceId);if(target)try{target.close(4003,'device revoked')}catch{};broadcastDeviceList(id);return}
       if(msg.type==='storage-peers'){const peers=[...storageNodes].filter(x=>x!==id && accountOnline(x)).slice(0,20);wsSend(socket,{type:'storage-peers',requestId:msg.requestId,peers});return}
       if(safeEnvelope(msg)&&msg.from.toLowerCase()===id){const online=route(msg.to,msg,{queue:true});wsSend(socket,{type:'ack',msgId:msg.payload.msgId,queued:!online});return}

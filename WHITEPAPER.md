@@ -1,6 +1,6 @@
 # FREE White Paper
 
-**Living document — updated through FREE-026 Private Alpha**
+**Living document — updated through FREE-028 Private Alpha**
 
 ## Abstract
 FREE is a post-quantum-native private communication protocol, decentralized node network, distributed encrypted-storage system and native economic network. The FREE application is the first client, not the owner of the network. Users own their cryptographic identities, keys and data. Network operators may contribute useful resources and receive protocol rewards. Economic and upgrade authority can evolve the network without granting any authority over user plaintext or private keys.
@@ -63,7 +63,7 @@ FREE Inc. or other service providers may sell premium storage, bandwidth, manage
 Protocol upgrades are versioned. Normal upgrades should be signed and timelocked; emergency authority may pause vulnerable economic/protocol modules and activate security migrations. User-security invariants—no master decryption key, client-controlled private keys, no plaintext on chain—are constitutional design boundaries rather than ordinary economic parameters.
 
 ## 13. Current status
-FREE-026 is experimental software. It demonstrates a PQ-native browser identity/messaging path, federation foundation, encrypted-vault experiments, node service accounting, deterministic inflation logic and a native Genesis Testnet ledger. It does not yet provide production consensus, production anonymous routing, a production PQ ratchet, mature distributed storage repair, transferable token wallets, production governance, or audited security.
+FREE-027 is experimental software. It demonstrates a PQ-native browser identity/messaging path, federation foundation, encrypted-vault experiments, node service accounting, deterministic inflation logic and a native Genesis Testnet ledger. It does not yet provide production consensus, production anonymous routing, a production PQ ratchet, mature distributed storage repair, transferable token wallets, production governance, or audited security.
 
 ## 14. Roadmap
 Near-term work: stabilize FREE-013 client authentication/onboarding; run multiple FREE nodes; add peer chain synchronization and validator consensus; add transferable PQ economic wallet transactions beyond the Founder Genesis identity; bind useful-service proofs to on-chain node rewards; implement signed policy/upgrade authorities and timelocks; improve distributed storage durability; then test economic simulations before any real-value token launch. Privacy and user-key sovereignty remain mandatory throughout.
@@ -133,28 +133,48 @@ FREE-023 removes browser prompt-based PIN entry from Recovery. PIN entry uses an
 FREE-023 separates the persistent Account Identity from installation-specific Device IDs at the relay session layer. Multiple authorized installations can be online simultaneously under one FREE ID. Device revocation is an account-signed network action and does not change the user's FREE ID. This is a testnet implementation, not the final trust model: a client that retains the Account Identity signing secret can theoretically create new device authorization material if fully compromised. The production target is device-scoped post-quantum credentials, protected root authority, key rotation and auditable revocation without giving FREE Inc. access to user secrets.
 
 
-## 18. FREE-026 — Whitepaper as a protocol surface
+## 18. FREE-027 — Whitepaper as a protocol surface
 
-**IMPLEMENTED / TESTNET DOCUMENTATION SURFACE.** FREE-026 publishes the living Whitepaper at `/whitepaper` while keeping `WHITEPAPER.md` as the single source of truth. The reader adds structured contents navigation, section anchors, an “On this page” rail, reading progress, responsive mobile presentation, implementation-status labels and a raw-Markdown copy action. The website is intentionally separate from the Messenger interaction surface so technical depth does not burden ordinary chat users.
+**IMPLEMENTED / TESTNET DOCUMENTATION SURFACE.** FREE-027 publishes the living Whitepaper at `/whitepaper` while keeping `WHITEPAPER.md` as the single source of truth. The reader adds structured contents navigation, section anchors, an “On this page” rail, reading progress, responsive mobile presentation, implementation-status labels and a raw-Markdown copy action. The website is intentionally separate from the Messenger interaction surface so technical depth does not burden ordinary chat users.
 
 The documentation follows the same trust discipline as the protocol: claims must distinguish **IMPLEMENTED**, **TESTNET**, **SPECIFICATION**, and **ROADMAP** states. A web presentation must never upgrade a roadmap statement into an implementation claim merely for marketing.
 
-FREE-026 also carries forward FREE-023 multi-device testnet authorization unchanged. Compact Recovery, Account Identity, Founder Genesis Economic Identity, Testnet-2 economics and the 4% gross-issuance ceiling are not modified by the Whitepaper website.
+FREE-027 also carries forward FREE-023 multi-device testnet authorization unchanged. Compact Recovery, Account Identity, Founder Genesis Economic Identity, Testnet-2 economics and the 4% gross-issuance ceiling are not modified by the Whitepaper website.
 
 
-## 19. FREE-026 — Encrypted Account Vault Sync
+## 19. FREE-027 — Encrypted Account Vault Sync
 
-**IMPLEMENTED / TESTNET.** FREE-026 introduces an encrypted account-state vault for cross-device continuity. Contacts, conversation metadata, blocked-account state and locally decrypted message history are serialized and encrypted on-device before upload. The relay persists only ciphertext, IV, revision metadata, account identifier and a post-quantum signature binding each update.
+**IMPLEMENTED / TESTNET.** FREE-027 introduces an encrypted account-state vault for cross-device continuity. Contacts, conversation metadata, blocked-account state and locally decrypted message history are serialized and encrypted on-device before upload. The relay persists only ciphertext, IV, revision metadata, account identifier and a post-quantum signature binding each update.
 
 The vault key is derived locally from two pieces that are recovered only after successful account recovery: the Recovery Secret and the account's PQ private signing material. The server never receives this key. Devices fetch the latest ciphertext, decrypt locally, merge messages by message ID, then publish a newly encrypted revision. This is a testnet merge model, not yet a CRDT or formally audited multi-device state protocol.
 
-**Limitation:** data that disappeared before FREE-026 and no longer exists on any device or queued relay ciphertext cannot be recreated cryptographically. FREE-026 prevents the same class of loss going forward; it does not invent historical plaintext that no surviving endpoint retains.
+**Limitation:** data that disappeared before FREE-027 and no longer exists on any device or queued relay ciphertext cannot be recreated cryptographically. FREE-027 prevents the same class of loss going forward; it does not invent historical plaintext that no surviving endpoint retains.
 
 
-## 20. FREE-026 — Restored-device message continuity
+## 20. FREE-027 — Restored-device message continuity
 
 **IMPLEMENTED / TESTNET.** A clean or restored device can receive a valid FREE-PQ envelope even before local contact metadata has synchronized. The sender's public self-certifying identity card may accompany the ciphertext. The receiving client recomputes its fingerprint, requires that fingerprint to match the envelope sender ID, and then verifies the ML-DSA-65 envelope signature before decrypting. This removes a failure mode where a valid ciphertext was silently discarded merely because the recipient's browser had an empty local contact list.
 
 The carried identity material is public. Private signing/decapsulation keys, Recovery Secret, PIN and plaintext message content remain endpoint-only. The relay may attach a previously authenticated public card to routed/queued envelopes but cannot forge a different card for the same self-certifying FREE ID without breaking the fingerprint binding.
 
-FREE-026 also hardens the Messenger viewport so the conversation composer remains inside the dynamic viewport at normal browser zoom. This is a usability change, not a cryptographic claim.
+FREE-027 also hardens the Messenger viewport so the conversation composer remains inside the dynamic viewport at normal browser zoom. This is a usability change, not a cryptographic claim.
+
+
+## 21. FREE-027 — continuity guard and recovery interaction
+
+**IMPLEMENTED / TESTNET.** FREE-027 adds a hydration barrier to encrypted Account Vault Sync. A device cannot publish a new vault snapshot until it has first attempted to load the current remote vault. If remote ciphertext exists but cannot be decrypted by the account, FREE fails closed and refuses to replace that ciphertext. Local account-scoped safety snapshots provide an additional browser-side guard against accidental state regression. This is defense-in-depth, not a substitute for future CRDT conflict resolution, replicated storage, or audited backup semantics.
+
+Desktop Recovery also supports keyboard-first completion: Enter submits the restore flow from the Recovery Address, Recovery Secret or PIN fields. Screen transitions are presentation-only and do not change cryptographic state or trust boundaries.
+
+**Historical limitation.** Encryption cannot recreate plaintext that disappeared before any surviving device, account vault, recovery capsule or queued encrypted envelope retained it. FREE therefore distinguishes continuity guarantees for newly synchronized state from recovery of already-lost pre-sync history.
+
+
+## 22. FREE-028 — Device cache and Distributed Storage v1
+
+**IMPLEMENTED / TESTNET.** FREE-028 changes the storage direction from “every device is the archive” to “device is a bounded cache; the FREE Storage Network is the encrypted archive.” Each chat message is independently serialized and encrypted on the user device under an account-owned archive key. The resulting ciphertext is content-addressed by CID. The testnet storage gateway accepts a chunk only after CID integrity verification and an ML-DSA-65 signature from the authenticated Account Identity. The gateway stores ciphertext and a per-account manifest; it does not receive the archive key or message plaintext.
+
+After a positive storage receipt, the browser may retain only the newest 250 messages per conversation locally. A restored device requests the archive manifest and can hydrate recent encrypted history, merging by stable message ID. This separates endpoint convenience from long-term storage responsibility and creates a concrete useful service that storage operators can provide.
+
+**PoUS boundary.** FREE-028 receipts are evidence of accepted content-addressed ciphertext, not yet a production Proof of Useful Service. A production design still requires randomized possession/retrieval challenges, replication or erasure-coded diversity, repair, anti-Sybil controls, service-quality scoring and settlement into FREE Chain. Only proofs/rewards/policy belong on chain; message ciphertext, media ciphertext, Recovery Secrets and private keys do not.
+
+**Persistence boundary.** The current hosted relay is a professional testnet gateway. Its `DATA_DIR` must use persistent storage for archive durability across redeploys. The protocol is designed to expand to independent storage nodes; a single hosted gateway is not decentralized storage.
