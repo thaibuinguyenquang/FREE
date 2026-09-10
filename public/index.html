@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#080808">
-  <title>FREE-020 · Messenger</title>
+  <title>FREE-022 · Messenger</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -97,5 +97,7 @@
   </main>
   <script src="/pq.bundle.js"></script>
   <script src="/app.js"></script>
+
+<div id="securePinModal" class="secure-modal" hidden><div class="secure-modal-card" role="dialog" aria-modal="true" aria-labelledby="securePinTitle"><h2 id="securePinTitle">Verify PIN</h2><p id="securePinLead" class="mini"></p><label id="securePinLabel" for="securePinInput">PIN</label><input id="securePinInput" type="password" inputmode="numeric" autocomplete="current-password" maxlength="6"><div id="securePinConfirmWrap" hidden><label id="securePinConfirmLabel" for="securePinConfirm">Confirm PIN</label><input id="securePinConfirm" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6"></div><p id="securePinError" class="secure-error"></p><div class="secure-modal-actions"><button id="securePinCancel" class="btn ghost" type="button">Cancel</button><button id="securePinSubmit" class="btn" type="button">Continue</button></div><p class="mini">Your PIN stays inside this page and is never displayed in plain text.</p></div></div>
 </body>
 </html>
