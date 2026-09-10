@@ -30,9 +30,13 @@ After deployment, `/health` should report `version: "FREE-023"` and `federationA
 After deploy, verify `/health` reports `version: "FREE-023"`. Test with two independent browser profiles: send both directions, leave one conversation closed to verify unread count, open it to verify sender status reaches `read`, then test remove/block/unblock. Do not clear the founder browser's site data or change `FOUNDER_GENESIS_SECRET`.
 
 
-## FREE-025 Whitepaper route
+## FREE-026 Whitepaper route
 After deployment, verify `https://<service>/whitepaper` and `https://<service>/whitepaper.md`. The rendered page must load from the same `WHITEPAPER.md` committed with the release.
 
 
-## FREE-025 data directory
+## FREE-026 data directory
 Keep `DATA_DIR` persistent for recovery capsules, offline queue, device registry, FREE Chain testnet state, and `account-vaults/`. Without persistent storage, encrypted account-vault continuity can be lost on host replacement/redeploy.
+
+
+## FREE-026 browser acceptance checks
+After deployment, verify at 100% browser zoom that the message composer remains visible. With a recipient account online on a clean/restored browser that has no local contacts, send a new message from an existing contact. The recipient should automatically display the authenticated sender/contact after validating the self-certifying public card and should decrypt the message, while the sender should progress to a delivery acknowledgement.

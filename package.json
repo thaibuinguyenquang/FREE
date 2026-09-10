@@ -1,8 +1,8 @@
 {
   "name": "free-protocol",
-  "version": "0.24.0",
+  "version": "0.26.0",
   "private": true,
-  "description": "FREE-024 post-quantum messenger with multi-device testnet authorization and living Whitepaper web",
+  "description": "FREE-026 post-quantum messenger with self-certifying envelope recovery, encrypted account vault sync, multi-device testnet and living Whitepaper web",
   "type": "commonjs",
   "engines": {
     "node": ">=20.19.0"

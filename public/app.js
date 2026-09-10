@@ -5,7 +5,7 @@ const dbName = 'free-v01'; // compatibility container; FREE-007 keeps the same I
 const CRYPTO_SUITE = 'FREE-PQ1';
 const KEM_NAME = 'ML-KEM-768';
 const SIG_NAME = 'ML-DSA-65';
-const APP_VERSION='FREE-025';
+const APP_VERSION='FREE-026';
 let db, me=null, profile=null, ws=null, selectedId=null;
 let contacts={}, chats={}, blockedIds={}, pendingVault=new Map();
 let readReceiptsEnabled=true,appLockEnabled=false,deviceId='',isUnlocked=false;
@@ -180,12 +180,23 @@ async function sendMessage(text){
   if(!selectedId||!contacts[selectedId])return;const c=contacts[selectedId];if(c.cryptoSuite!==CRYPTO_SUITE)throw new Error('This contact uses an obsolete classical identity. Re-add their FREE-PQ identity.');
   const msgId=uuid(),sentAt=Date.now();const kem=pq().encapsulate(c.kemPublicKey);const key=await messageKey(kem.sharedSecret,me.id,c.id,msgId);const iv=crypto.getRandomValues(new Uint8Array(12));const aad=aadFor(me.id,c.id,msgId,sentAt,kem.cipherText);const ciphertext=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad},key,enc.encode(text));
   const signable={suite:CRYPTO_SUITE,from:me.id,to:c.id,msgId,sentAt,kemCiphertext:kem.cipherText,iv:b64(iv),ciphertext:b64(ciphertext)};const signature=await signObject(signable);const payload={...signable,signature};
-  const wire={type:'envelope',from:me.id,to:c.id,payload};chats[c.id]=chats[c.id]||[];chats[c.id].push({msgId,from:me.id,to:c.id,text,sentAt,status:'sending',suite:CRYPTO_SUITE,wire});await saveState();renderChat();if(ws?.readyState!==1){chats[c.id].at(-1).status='offline';await saveState();renderChat();return}ws.send(JSON.stringify(wire))
+  // Carry the sender's public self-certifying card with every new envelope. This lets a
+  // restored/new device authenticate the sender and receive the message even when its
+  // local contact list has not been synchronized yet. No secret material is included.
+  const wire={type:'envelope',from:me.id,to:c.id,payload,senderCard:cardForMe()};chats[c.id]=chats[c.id]||[];chats[c.id].push({msgId,from:me.id,to:c.id,text,sentAt,status:'sending',suite:CRYPTO_SUITE,wire});await saveState();renderChat();if(ws?.readyState!==1){chats[c.id].at(-1).status='offline';await saveState();renderChat();return}ws.send(JSON.stringify(wire))
 }
 async function resendOutbox(){if(ws?.readyState!==1)return;let changed=false;for(const id of Object.keys(chats)){for(const m of chats[id]||[]){if(m.from===me.id&&m.wire&&['offline','sending'].includes(m.status)){ws.send(JSON.stringify(m.wire));m.status='sending';changed=true}}}if(changed){await saveState();renderChat()}}
 async function receiveEnvelope(msg){
   if(blockedIds?.[msg.from])return;
-  const c=contacts[msg.from];if(!c||c.cryptoSuite!==CRYPTO_SUITE)return;const p=msg.payload;if(p.suite!==CRYPTO_SUITE||p.from!==msg.from||p.to!==msg.to)return;
+  // A clean/restored device may not have the sender in its local contact list yet.
+  // Recover only from a self-certifying public card whose fingerprint is the envelope
+  // sender ID; the envelope signature is then verified with that card before decryption.
+  let c=contacts[msg.from];
+  if((!c||c.cryptoSuite!==CRYPTO_SUITE)&&msg.senderCard){
+    const card=msg.senderCard;
+    if(card.id===msg.from&&await validateCard(card)){await addContactCard(card);c=contacts[msg.from];renderContacts()}
+  }
+  if(!c||c.cryptoSuite!==CRYPTO_SUITE)return;const p=msg.payload;if(p.suite!==CRYPTO_SUITE||p.from!==msg.from||p.to!==msg.to)return;
   const signable={suite:p.suite,from:p.from,to:p.to,msgId:p.msgId,sentAt:p.sentAt,kemCiphertext:p.kemCiphertext,iv:p.iv,ciphertext:p.ciphertext};const ok=await verifyObject(signable,p.signature,c.sigPublicKey);if(!ok)return;
   try{const shared=pq().decapsulate(p.kemCiphertext,me.kemSecretKey);const key=await messageKey(shared,p.from,p.to,p.msgId);const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(p.iv),additionalData:aadFor(p.from,p.to,p.msgId,p.sentAt,p.kemCiphertext)},key,unb64(p.ciphertext));chats[msg.from]=chats[msg.from]||[];if(!chats[msg.from].some(x=>x.msgId===p.msgId))chats[msg.from].push({msgId:p.msgId,from:msg.from,to:me.id,text:dec.decode(plain),sentAt:p.sentAt,status:'received',suite:CRYPTO_SUITE});await saveState();if(selectedId===msg.from){renderChat();await markConversationRead(msg.from)}else renderContacts();if(ws?.readyState===1)ws.send(JSON.stringify({type:'delivery',from:me.id,to:msg.from,msgId:p.msgId}))}catch(e){console.warn('PQ decrypt failed',e)}
 }
@@ -243,7 +254,7 @@ async function restoreAccountFromKit(){
 }
 async function refreshChain(){try{const r=await fetch('/api/chain',{cache:'no-store'});if(!r.ok)return;const c=await r.json();$('#chainHeight').textContent=String(c.height??0);$('#founderAddress').textContent=c.addresses?.founder||'—';$('#founderBalance').textContent=`${Number(c.balances?.founder||0).toFixed(6)} FREE`;$('#genesisHash').textContent=c.genesisHash||'—';$('#latestBlockHash').textContent=c.latestBlockHash||'—';const secs=Math.max(0,Math.ceil((Number(c.nextEpochAt||0)-Date.now())/1000));$('#chainNextEpoch').textContent=`Testnet · reward epoch tiếp theo ~ ${secs}s`; }catch(e){console.warn('chain status',e)}}
 function bootReady(){const b=$('#bootFallback');if(b)b.hidden=true}
-function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');b.querySelector('span').textContent=`FREE-025 không khởi động được: ${e?.message||e}`;b.querySelector('small').textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
+function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');b.querySelector('span').textContent=`FREE-026 không khởi động được: ${e?.message||e}`;b.querySelector('small').textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
 
 async function init(){
  currentLang=localStorage.getItem('free-lang')||((navigator.language||'').toLowerCase().startsWith('vi')?'vi':'en');setLanguage(currentLang);db=await openDB();

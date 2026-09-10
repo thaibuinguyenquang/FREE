@@ -1,4 +1,4 @@
-# FREE-025 — Private Alpha Messenger
+# FREE-026 — Private Alpha Messenger
 
 FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-023 advances the usable post-quantum messenger while preserving **FREE Chain Freedom Economy Testnet-2** while preserving the FREE-PQ1 communication path and the rule that user secrets never belong to the chain or founder.
 
@@ -87,9 +87,13 @@ New accounts use a compact Recovery Address plus Recovery Secret and PIN. The re
 - Testnet limitation: because restored browser clients still possess the Account Identity secret key, this is not yet hardware-rooted theft resistance; production design requires device-scoped credentials plus root-key isolation/rotation.
 
 
-## FREE-025 — Whitepaper Web
-FREE-025 adds `/whitepaper`, a dedicated reader generated from the single living `WHITEPAPER.md` source. It includes fixed contents navigation, an on-page outline, reading progress, implementation-status legend, responsive mobile navigation and a Copy Markdown action. The website does not fork or duplicate the Whitepaper content.
+## FREE-026 — Whitepaper Web
+FREE-026 adds `/whitepaper`, a dedicated reader generated from the single living `WHITEPAPER.md` source. It includes fixed contents navigation, an on-page outline, reading progress, implementation-status legend, responsive mobile navigation and a Copy Markdown action. The website does not fork or duplicate the Whitepaper content.
 
 
-## FREE-025 — Encrypted Account Vault Sync
-FREE-025 adds an opaque encrypted account-vault sync surface for contacts, conversation state and encrypted message-history snapshots. The relay stores ciphertext only. Vault encryption is derived from the local Recovery Secret plus the account PQ private signing material, so a server-side recovery-address leak alone is not sufficient to decrypt the vault. Sync merges by message ID before upload. Existing data that was already lost before FREE-025 cannot be reconstructed unless another device still retains it.
+## FREE-026 — Encrypted Account Vault Sync
+FREE-026 adds an opaque encrypted account-vault sync surface for contacts, conversation state and encrypted message-history snapshots. The relay stores ciphertext only. Vault encryption is derived from the local Recovery Secret plus the account PQ private signing material, so a server-side recovery-address leak alone is not sufficient to decrypt the vault. Sync merges by message ID before upload. Existing data that was already lost before FREE-026 cannot be reconstructed unless another device still retains it.
+
+
+## FREE-026 — Messenger transport and viewport hardening
+FREE-026 fixes two private-alpha blockers found during live browser testing. The Messenger now occupies the available viewport instead of extending the composer below the browser window, so sending messages does not require browser zoom. New envelopes carry only the sender's public self-certifying FREE-PQ identity card; a restored device with an empty local contact list can validate that card from the full FREE ID, verify the ML-DSA-65 envelope signature, add the sender locally, decrypt the message, and return delivery acknowledgement. The relay also enriches envelopes with the already-authenticated public card when available, including queued delivery. No private key, Recovery Secret, PIN or plaintext message is added to the relay envelope.

@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-025';
+const VERSION = 'FREE-026';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -297,16 +297,22 @@ function queueFor(to, msg){
 function route(to,msg,{queue=true}={}){
   if(!validId(to)) return false;
   const target=accountSockets(to);
-  let delivered=false; for(const ws of target.values()){ if(socketOpen(ws)){wsSend(ws,msg);delivered=true;} }
+  let delivered=false; const outbound=safeEnvelope(msg)?enrichEnvelope(msg):msg; for(const ws of target.values()){ if(socketOpen(ws)){wsSend(ws,outbound);delivered=true;} }
   if(delivered) return true;
-  if(routeFederated(to,msg)) return true;
-  if(queue) queueFor(to,msg);
+  if(routeFederated(to,outbound)) return true;
+  if(queue) queueFor(to,outbound);
   return false;
 }
 function safeEnvelope(x){
   if(!(x && x.type==='envelope' && validId(x.to) && validId(x.from) && x.payload)) return false;
   const p=x.payload;
   return p.suite==='FREE-PQ1' && typeof p.kemCiphertext==='string' && p.kemCiphertext.length<=8000 && typeof p.ciphertext==='string' && p.ciphertext.length<=700000 && typeof p.iv==='string' && p.iv.length<=128 && typeof p.signature==='string' && p.signature.length<=12000 && typeof p.sentAt==='number' && Math.abs(Date.now()-p.sentAt)<=30*24*60*60*1000 && typeof p.msgId==='string' && p.msgId.length>=8 && p.msgId.length<=128;
+}
+function enrichEnvelope(x){
+  if(!safeEnvelope(x)) return x;
+  if(x.senderCard) return x;
+  const card=contactCards.get(String(x.from||'').toLowerCase());
+  return card ? {...x,senderCard:card} : x;
 }
 function safeContactCard(x){
   const c=x?.card;
@@ -459,7 +465,7 @@ async function handleClientConnection(socket, req){
         const prior=sockets.get(deviceId); if(prior&&prior!==socket)closeClient(prior); sockets.set(deviceId,socket);
         contactCards.set(id,card); saveCards(); announcePresence(id,true);
         wsSend(socket,{type:'hello-ok',id,deviceId,serverTime:Date.now(),version:VERSION}); broadcastDeviceList(id);
-        const queued=offlineQueue[id]||[]; delete offlineQueue[id]; saveQueue(); for(const q of queued)wsSend(socket,q);
+        const queued=offlineQueue[id]||[]; delete offlineQueue[id]; saveQueue(); for(const q of queued)wsSend(socket,safeEnvelope(q)?enrichEnvelope(q):q);
         return;
       }
       if(!authenticated||!id)return;

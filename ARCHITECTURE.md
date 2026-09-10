@@ -30,9 +30,15 @@ Public user identity cards contain public keys only and are persisted by a relay
 - Mobile chat navigation has an explicit back state.
 
 
-## Whitepaper delivery surface — FREE-025
+## Whitepaper delivery surface — FREE-026
 `WHITEPAPER.md` remains the canonical living document. `/whitepaper` renders that file client-side through same-origin `/whitepaper.md`; no second Whitepaper source is maintained. The route is documentation-only and does not receive account secrets, Recovery credentials or message plaintext.
 
 
-## FREE-025 encrypted account vault sync
+## FREE-026 encrypted account vault sync
 `/api/account-vault?address=...` stores opaque AES-256-GCM ciphertext only. Updates are ML-DSA-65 signed and bound to the authenticated account. Client state is merged by message ID before a new encrypted revision is written. This remains testnet architecture; conflict handling is not yet a production CRDT.
+
+
+## FREE-026 restored-device envelope bootstrap
+A recipient must not silently drop a valid encrypted envelope solely because a restored installation has not yet synchronized its contact list. Each routed envelope may carry the sender's public FREE-PQ card. The recipient recomputes the self-certifying identity fingerprint, requires it to equal the envelope `from` ID, then verifies the ML-DSA-65 message signature before decryption. This bootstraps only public contact material; secret keys and plaintext remain endpoint-only.
+
+The Messenger shell is also constrained to the dynamic viewport (`100dvh`) with nested `min-height:0` scroll containers, keeping the composer visible at normal browser zoom.
