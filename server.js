@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-016';
+const VERSION = 'FREE-017';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -49,6 +49,19 @@ setInterval(pruneQueue, 60 * 60 * 1000).unref();
 const mime = {'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.svg':'image/svg+xml'};
 const rateBuckets = new Map();
 function clientIp(req) { return String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown'; }
+function originAllowed(req) {
+  const origin = String(req.headers.origin || '').trim();
+  // Native/non-browser clients may omit Origin. Browser clients must either match
+  // this host exactly or be explicitly allow-listed.
+  if (!origin) return true;
+  try {
+    const u = new URL(origin);
+    const reqHost = String(req.headers.host || '').toLowerCase();
+    const originHost = String(u.host || '').toLowerCase();
+    if ((u.protocol === 'https:' || u.protocol === 'http:') && reqHost && originHost === reqHost) return true;
+    return ALLOWED_ORIGINS.includes(origin);
+  } catch { return false; }
+}
 function rateOK(key, limit) {
   const now = Date.now(); let b = rateBuckets.get(key);
   if (!b || now - b.start >= 60000) b = {start:now,count:0};

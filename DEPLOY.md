@@ -20,7 +20,7 @@ After deployment verify, in order:
 
 Do not clear browser site data while diagnosing the client because the existing FREE communication identity is local to the browser. FREE-013 remains testnet software with no monetary value and no production decentralized consensus yet.
 
-## FREE-016 independent-node test
-Keep `FOUNDER_GENESIS_SECRET` private and unchanged for the existing Testnet-2 founder identity. A node that should be discoverable by other FREE nodes needs `PUBLIC_NODE_URL` set to its public HTTPS base URL. Additional nodes can use comma-separated `BOOTSTRAP_PEERS` values pointing at known FREE node base URLs. Each FREE-016 node creates and persists a separate ML-DSA-65 federation identity in its `DATA_DIR`; durable `DATA_DIR` storage is therefore important for stable node identity.
+## FREE-017 independent-node test
+Keep `FOUNDER_GENESIS_SECRET` private and unchanged for the existing Testnet-2 founder identity. A node that should be discoverable by other FREE nodes needs `PUBLIC_NODE_URL` set to its public HTTPS base URL. Additional nodes can use comma-separated `BOOTSTRAP_PEERS` values pointing at known FREE node base URLs. Each FREE-017 node creates and persists a separate ML-DSA-65 federation identity in its `DATA_DIR`; durable `DATA_DIR` storage is therefore important for stable node identity.
 
-After deployment, `/health` should report `version: "FREE-016"` and `federationAuth: "ML-DSA-65"`. `federationPeers` greater than zero only proves an authenticated peer connection; it does not prove blockchain consensus.
+After deployment, `/health` should report `version: "FREE-017"` and `federationAuth: "ML-DSA-65"`. `federationPeers` greater than zero only proves an authenticated peer connection; it does not prove blockchain consensus.

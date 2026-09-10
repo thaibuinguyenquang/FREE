@@ -1,8 +1,8 @@
 {
   "name": "free-protocol",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "private": true,
-  "description": "FREE-016 reliable PQ messenger restore and authenticated WebSocket transport",
+  "description": "FREE-017 post-quantum messenger restore/auth hardening and FREE Chain Testnet-2",
   "type": "commonjs",
   "engines": {
     "node": ">=20.19.0"
