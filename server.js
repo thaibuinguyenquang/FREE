@@ -6,13 +6,15 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-018';
+const VERSION = 'FREE-020';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data');
 const freeChain = new FreeChain({dataDir: DATA_DIR, pqModule, version: VERSION});
 const QUEUE_FILE = path.join(DATA_DIR, 'offline-queue.json');
+const RECOVERY_DIR = path.join(DATA_DIR, 'recovery-capsules');
+fs.mkdirSync(RECOVERY_DIR, { recursive: true });
 const MAX_FRAME_BYTES = Number(process.env.MAX_FRAME_BYTES || 1024 * 1024);
 const MAX_QUEUE_PER_ID = Number(process.env.MAX_QUEUE_PER_ID || 500);
 const QUEUE_TTL_MS = Number(process.env.QUEUE_TTL_MS || 7 * 24 * 60 * 60 * 1000);
@@ -310,6 +312,9 @@ function safeVaultStore(x){ return x && x.type==='vault-store' && validId(x.to) 
 function safeVaultFetch(x){ return x && x.type==='vault-fetch' && validId(x.to) && validId(x.from) && validCid(x.cid) && typeof x.requestId==='string' && x.requestId.length<=128; }
 function safeVaultResponse(x){ return x && x.type==='vault-response' && validId(x.to) && validId(x.from) && validCid(x.cid) && typeof x.requestId==='string' && typeof x.share==='string' && x.share.length<=700000; }
 
+function readJsonBody(req,max=900000){return new Promise((resolve,reject)=>{let size=0,chunks=[];req.on('data',c=>{size+=c.length;if(size>max){reject(new Error('body too large'));req.destroy();return}chunks.push(c)});req.on('end',()=>{try{resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}'))}catch(e){reject(e)}});req.on('error',reject)})}
+function validRecoveryAddress(x){return /^FR-[A-Z2-7]{4}(?:-[A-Z2-7]{4}){4}$/.test(String(x||''))}
+function recoveryFile(address){return path.join(RECOVERY_DIR,address.replace(/-/g,'')+'.json')}
 const server = http.createServer(async (req,res)=>{
   securityHeaders(res);
   const ip=clientIp(req);
@@ -319,6 +324,19 @@ const server = http.createServer(async (req,res)=>{
     if(url.pathname==='/health'){
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
       return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:clients.size,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',clientAuth:'ML-DSA-65',clientWebSocket:'ws-library',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size}));
+    }
+    if(url.pathname==='/api/recovery-capsule'){
+      const address=String(url.searchParams.get('address')||'').toUpperCase();
+      if(req.method==='GET'){
+        if(!validRecoveryAddress(address)){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'bad recovery address'}))}
+        try{const capsule=JSON.parse(fs.readFileSync(recoveryFile(address),'utf8'));res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify(capsule))}catch{res.writeHead(404,{'content-type':'application/json'});return res.end(JSON.stringify({error:'recovery capsule not found'}))}
+      }
+      if(req.method==='PUT'){
+        if(!originAllowed(req)){res.writeHead(403);return res.end('forbidden')}
+        const body=await readJsonBody(req);if(!validRecoveryAddress(body.address)||body.address!==address||body.v!==2||typeof body.salt!=='string'||typeof body.iv!=='string'||typeof body.ciphertext!=='string'||body.ciphertext.length>800000){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid capsule'}))}
+        atomicWriteJson(recoveryFile(address),{v:2,suite:'FREE-PQ1',address,salt:body.salt,iv:body.iv,ciphertext:body.ciphertext,updatedAt:Date.now()});res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,address}))
+      }
+      res.writeHead(405);return res.end('method not allowed');
     }
     if(url.pathname==='/api/card'){
       const id=(url.searchParams.get('id')||'').toLowerCase();
