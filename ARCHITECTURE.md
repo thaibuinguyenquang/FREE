@@ -30,5 +30,9 @@ Public user identity cards contain public keys only and are persisted by a relay
 - Mobile chat navigation has an explicit back state.
 
 
-## Whitepaper delivery surface — FREE-024
+## Whitepaper delivery surface — FREE-025
 `WHITEPAPER.md` remains the canonical living document. `/whitepaper` renders that file client-side through same-origin `/whitepaper.md`; no second Whitepaper source is maintained. The route is documentation-only and does not receive account secrets, Recovery credentials or message plaintext.
+
+
+## FREE-025 encrypted account vault sync
+`/api/account-vault?address=...` stores opaque AES-256-GCM ciphertext only. Updates are ML-DSA-65 signed and bound to the authenticated account. Client state is merged by message ID before a new encrypted revision is written. This remains testnet architecture; conflict handling is not yet a production CRDT.

@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-024';
+const VERSION = 'FREE-025';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -14,6 +14,7 @@ const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : pat
 const freeChain = new FreeChain({dataDir: DATA_DIR, pqModule, version: VERSION});
 const QUEUE_FILE = path.join(DATA_DIR, 'offline-queue.json');
 const RECOVERY_DIR = path.join(DATA_DIR, 'recovery-capsules');
+const ACCOUNT_VAULT_DIR = path.join(DATA_DIR, 'account-vaults');
 fs.mkdirSync(RECOVERY_DIR, { recursive: true });
 const MAX_FRAME_BYTES = Number(process.env.MAX_FRAME_BYTES || 1024 * 1024);
 const MAX_QUEUE_PER_ID = Number(process.env.MAX_QUEUE_PER_ID || 500);
@@ -326,6 +327,8 @@ function safeVaultResponse(x){ return x && x.type==='vault-response' && validId(
 function readJsonBody(req,max=900000){return new Promise((resolve,reject)=>{let size=0,chunks=[];req.on('data',c=>{size+=c.length;if(size>max){reject(new Error('body too large'));req.destroy();return}chunks.push(c)});req.on('end',()=>{try{resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}'))}catch(e){reject(e)}});req.on('error',reject)})}
 function validRecoveryAddress(x){return /^FR-[A-Z2-7]{4}(?:-[A-Z2-7]{4}){4}$/.test(String(x||''))}
 function recoveryFile(address){return path.join(RECOVERY_DIR,address.replace(/-/g,'')+'.json')}
+function accountVaultFile(address){return path.join(ACCOUNT_VAULT_DIR,address.replace(/-/g,'')+'.json')}
+function validVaultBlob(x){return x&&x.v===1&&x.suite==='FREE-PQ1'&&validRecoveryAddress(x.address)&&validId(x.accountId)&&Number.isFinite(Number(x.revision))&&Number(x.revision)>=0&&typeof x.iv==='string'&&x.iv.length<256&&typeof x.ciphertext==='string'&&x.ciphertext.length<=1200000&&typeof x.signature==='string'&&x.signature.length<12000}
 const server = http.createServer(async (req,res)=>{
   securityHeaders(res);
   const ip=clientIp(req);
@@ -357,6 +360,30 @@ const server = http.createServer(async (req,res)=>{
         if(!originAllowed(req)){res.writeHead(403);return res.end('forbidden')}
         const body=await readJsonBody(req);if(!validRecoveryAddress(body.address)||body.address!==address||body.v!==2||typeof body.salt!=='string'||typeof body.iv!=='string'||typeof body.ciphertext!=='string'||body.ciphertext.length>800000){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid capsule'}))}
         atomicWriteJson(recoveryFile(address),{v:2,suite:'FREE-PQ1',address,salt:body.salt,iv:body.iv,ciphertext:body.ciphertext,updatedAt:Date.now()});res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,address}))
+      }
+      res.writeHead(405);return res.end('method not allowed');
+    }
+
+    if(url.pathname==='/api/account-vault'){
+      const address=String(url.searchParams.get('address')||'').toUpperCase();
+      if(!validRecoveryAddress(address)){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'bad recovery address'}))}
+      if(req.method==='GET'){
+        try{const vault=JSON.parse(fs.readFileSync(accountVaultFile(address),'utf8'));res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify(vault))}catch{res.writeHead(404,{'content-type':'application/json'});return res.end(JSON.stringify({error:'account vault not found'}))}
+      }
+      if(req.method==='PUT'){
+        if(!originAllowed(req)){res.writeHead(403);return res.end('forbidden')}
+        const body=await readJsonBody(req,1400000);
+        if(!validVaultBlob(body)||body.address!==address){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid vault'}))}
+        const card=contactCards.get(String(body.accountId).toLowerCase());
+        if(!card){res.writeHead(409,{'content-type':'application/json'});return res.end(JSON.stringify({error:'account must authenticate before vault sync'}))}
+        const digest=crypto.createHash('sha512').update(body.ciphertext).digest('hex');
+        const bytes=Buffer.from(`FREE-ACCOUNT-VAULT-1:${address}:${Number(body.revision)}:${digest}`,'utf8');
+        if(!(await verifyPqSignatureBytes(body.signature,bytes,card.sigPublicKey))){res.writeHead(403,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid vault signature'}))}
+        let prev=null;try{prev=JSON.parse(fs.readFileSync(accountVaultFile(address),'utf8'))}catch{}
+        if(prev&&prev.accountId!==body.accountId){res.writeHead(409,{'content-type':'application/json'});return res.end(JSON.stringify({error:'vault address already bound'}))}
+        if(prev&&Number(body.revision)<Number(prev.revision||0)){res.writeHead(409,{'content-type':'application/json'});return res.end(JSON.stringify({error:'stale revision',revision:prev.revision}))}
+        atomicWriteJson(accountVaultFile(address),{v:1,suite:'FREE-PQ1',address,accountId:body.accountId,revision:Number(body.revision),iv:body.iv,ciphertext:body.ciphertext,signature:body.signature,updatedAt:Date.now()});
+        res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,address,revision:Number(body.revision)}))
       }
       res.writeHead(405);return res.end('method not allowed');
     }

@@ -1,4 +1,4 @@
-# FREE-024 — Private Alpha Messenger
+# FREE-025 — Private Alpha Messenger
 
 FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-023 advances the usable post-quantum messenger while preserving **FREE Chain Freedom Economy Testnet-2** while preserving the FREE-PQ1 communication path and the rule that user secrets never belong to the chain or founder.
 
@@ -87,5 +87,9 @@ New accounts use a compact Recovery Address plus Recovery Secret and PIN. The re
 - Testnet limitation: because restored browser clients still possess the Account Identity secret key, this is not yet hardware-rooted theft resistance; production design requires device-scoped credentials plus root-key isolation/rotation.
 
 
-## FREE-024 — Whitepaper Web
-FREE-024 adds `/whitepaper`, a dedicated reader generated from the single living `WHITEPAPER.md` source. It includes fixed contents navigation, an on-page outline, reading progress, implementation-status legend, responsive mobile navigation and a Copy Markdown action. The website does not fork or duplicate the Whitepaper content.
+## FREE-025 — Whitepaper Web
+FREE-025 adds `/whitepaper`, a dedicated reader generated from the single living `WHITEPAPER.md` source. It includes fixed contents navigation, an on-page outline, reading progress, implementation-status legend, responsive mobile navigation and a Copy Markdown action. The website does not fork or duplicate the Whitepaper content.
+
+
+## FREE-025 — Encrypted Account Vault Sync
+FREE-025 adds an opaque encrypted account-vault sync surface for contacts, conversation state and encrypted message-history snapshots. The relay stores ciphertext only. Vault encryption is derived from the local Recovery Secret plus the account PQ private signing material, so a server-side recovery-address leak alone is not sufficient to decrypt the vault. Sync merges by message ID before upload. Existing data that was already lost before FREE-025 cannot be reconstructed unless another device still retains it.
