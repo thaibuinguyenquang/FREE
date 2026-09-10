@@ -5,10 +5,10 @@ const dbName = 'free-v01'; // compatibility container; FREE-007 keeps the same I
 const CRYPTO_SUITE = 'FREE-PQ1';
 const KEM_NAME = 'ML-KEM-768';
 const SIG_NAME = 'ML-DSA-65';
-const APP_VERSION='FREE-014';
+const APP_VERSION='FREE-016';
 let db, me=null, profile=null, ws=null, selectedId=null;
 let contacts={}, chats={}, pendingVault=new Map();
-let storageEnabled=false, currentLang='vi', authTimer=null, nodeServiceId='', nodeCapacityMb=1024;
+let storageEnabled=false, currentLang='vi', authTimer=null, reconnectTimer=null, connectGeneration=0, nodeServiceId='', nodeCapacityMb=1024;
 const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const unb64 = str => Uint8Array.from(atob(str), c => c.charCodeAt(0));
 const b64url = buf => b64(buf).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -64,17 +64,28 @@ function status(text,good=true){const e=$('#status');if(!e)return;e.textContent=
 function updateStorageText(){const e=$('#storageState');if(e)e.textContent=storageEnabled?t('storageOn'):t('storageOff')}
 function renderService(x){if(!x)return;$('#testCredits').textContent=Number(x.credits||0).toFixed(3);$('#serviceStats').textContent=`${Number(x.storedBytes||0).toLocaleString()} bytes · ${x.receipts||0} receipts · capacity ${x.capacityMb||0} MB`;}
 function showStep(id){['welcomeStep','createStep','recoveryStep','createdStep'].forEach(x=>$('#'+x).hidden=x!==id)}
-function showApp(){$('#onboarding').hidden=true;$('#appShell').hidden=false;window.scrollTo({top:0,left:0,behavior:'instant'});showView('chatsView');renderIdentity();renderContacts();renderChat();connect()}
+function showApp(){$('#onboarding').hidden=true;$('#appShell').hidden=false;document.body.classList.add('in-app');window.scrollTo({top:0,left:0,behavior:'instant'});showView('chatsView');renderIdentity();renderContacts();renderChat();connect()}
 function showView(id){document.querySelectorAll('.app-view').forEach(v=>{v.hidden=v.id!==id;v.classList.toggle('active-view',v.id===id)});document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===id));window.scrollTo({top:0,left:0,behavior:'instant'});if(id==='settingsView'){const a=$('#displayNameHeading'),b=$('#shortId');if($('#settingsName'))$('#settingsName').textContent=a?.textContent||profile?.name||'FREE';if($('#settingsShortId'))$('#settingsShortId').textContent=b?.textContent||shortId(me?.id||'')} }
 async function addContactCard(card,name){if(!(await validateCard(card)))throw new Error('Invalid or non-PQ FREE identity');if(card.id===me.id)throw new Error('This is your own identity');contacts[card.id]={...card,name:name||card.displayName||contacts[card.id]?.name||`FREE ${card.shortId||card.id.slice(0,10)}`};await saveState();renderContacts();return contacts[card.id]}
 async function fetchCardById(id){if(!/^[a-f0-9]{64}$/i.test(id))throw new Error('Invalid FREE full identity');const r=await fetch(`/api/card?id=${encodeURIComponent(id)}`,{cache:'no-store'});if(!r.ok)throw new Error('Identity is not currently published on this relay');const card=await r.json();if(!(await validateCard(card))||card.id.toLowerCase()!==id.toLowerCase())throw new Error('Relay returned an invalid identity card');return card}
 async function parseInvite(input){const raw=input.trim();let id='';try{const u=new URL(raw,location.origin);id=(u.hash.match(/#freeid=([a-f0-9]{64})/i)||[])[1]||''}catch{}if(!id&&/^[a-f0-9]{64}$/i.test(raw))id=raw;if(!id)throw new Error('Paste a FREE-PQ invite link or full FREE identity');return fetchCardById(id.toLowerCase())}
 async function addFromInvite(input){const card=await parseInvite(input);await addContactCard(card);selectedId=card.id;renderContacts();renderChat();if(ws?.readyState===1){const mine=cardForMe();const signature=await signObject(mine);ws.send(JSON.stringify({type:'contact-card',from:me.id,to:card.id,card:mine,signature}))}return card}
 
-function connect(){if(!me)return;const proto=location.protocol==='https:'?'wss':'ws';ws=new WebSocket(`${proto}://${location.host}/ws`);ws.onopen=()=>{status(t('authenticating'));clearTimeout(authTimer);authTimer=setTimeout(()=>{if(ws?.readyState===1)status(t('authTimeout'),false)},30000)};ws.onclose=()=>{clearTimeout(authTimer);status(t('reconnecting'),false);setTimeout(connect,1800)};ws.onerror=()=>status(t('connectionError'),false);ws.onmessage=e=>{try{handleWs(JSON.parse(e.data))}catch(err){console.error('WS message error',err)}}}
-async function handleWs(msg){
-  if(msg.type==='challenge'){const card=cardForMe();const authText=enc.encode(`FREE-AUTH-1:${me.id}:${msg.challenge}`);const signature=pq().sign(authText,me.sigSecretKey);ws.send(JSON.stringify({type:'hello-auth',id:me.id,challenge:msg.challenge,card,signature}));return}
-  if(msg.type==='hello-ok'){clearTimeout(authTimer);status(t('connected'));await resendOutbox();if(storageEnabled)ws.send(JSON.stringify({type:'storage-advertise',enabled:true,nodeId:nodeServiceId,capacityMb:nodeCapacityMb}));return}
+function connect(){
+ if(!me)return;
+ if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING))return;
+ clearTimeout(reconnectTimer);clearTimeout(authTimer);
+ const generation=++connectGeneration,proto=location.protocol==='https:'?'wss':'ws';
+ status(t('reconnecting'),false);
+ const sock=new WebSocket(`${proto}://${location.host}/ws`);ws=sock;
+ sock.onopen=()=>{if(generation!==connectGeneration)return;status(t('authenticating'),false);authTimer=setTimeout(()=>{if(generation===connectGeneration&&sock.readyState===WebSocket.OPEN){status(t('authTimeout'),false);try{sock.close(4001,'client auth timeout')}catch{}}},45000)};
+ sock.onclose=()=>{if(generation!==connectGeneration)return;clearTimeout(authTimer);status(t('reconnecting'),false);reconnectTimer=setTimeout(connect,2000)};
+ sock.onerror=()=>{if(generation===connectGeneration)status(t('connectionError'),false)};
+ sock.onmessage=e=>{if(generation!==connectGeneration)return;try{handleWs(JSON.parse(e.data),sock)}catch(err){console.error('WS message error',err)}};
+}
+async function handleWs(msg,sock=ws){
+  if(msg.type==='challenge'){try{status(t('authenticating'),false);const card=cardForMe();const authText=enc.encode(`FREE-AUTH-1:${me.id}:${msg.challenge}`);const signature=await Promise.resolve(pq().sign(authText,me.sigSecretKey));if(sock?.readyState===WebSocket.OPEN)sock.send(JSON.stringify({type:'hello-auth',id:me.id,challenge:msg.challenge,card,signature}));}catch(err){console.error('PQ auth sign error',err);status(`${t('authFailed')} · local-sign-error`,false);try{sock?.close(4002,'local sign error')}catch{}}return}
+  if(msg.type==='hello-ok'){clearTimeout(authTimer);status(t('connected'));await resendOutbox();if(storageEnabled&&sock?.readyState===WebSocket.OPEN)sock.send(JSON.stringify({type:'storage-advertise',enabled:true,nodeId:nodeServiceId,capacityMb:nodeCapacityMb}));return}
   if(msg.type==='auth-error'){clearTimeout(authTimer);status(`${t('authFailed')}${msg.reason?' · '+msg.reason:''}`,false);return}
   if(msg.type==='ack'){for(const id of Object.keys(chats)){const m=(chats[id]||[]).find(x=>x.msgId===msg.msgId);if(m){m.status=msg.queued?'queued':'sent';await saveState();if(id===selectedId)renderChat();break}}return}
   if(msg.type==='delivery'){for(const id of Object.keys(chats)){const m=(chats[id]||[]).find(x=>x.msgId===msg.msgId);if(m){m.status='delivered';await saveState();if(id===selectedId)renderChat();break}}return}
@@ -147,11 +158,25 @@ async function finishExistingSetup(){
  if(!name)throw new Error(currentLang==='vi'?'Hãy nhập tên hiển thị.':'Enter a display name.');if(!validPin(pin))throw new Error(currentLang==='vi'?'PIN phải gồm 4–6 chữ số.':'PIN must be 4–6 digits.');if(pin!==pin2)throw new Error(currentLang==='vi'?'Hai mã PIN không khớp.':'PIN values do not match.');
  if(!me)me=await createIdentity();profile={displayName:name,createdAt:Date.now()};await setKV('profile',profile);contacts=await getKV('contacts')||{};chats=await getKV('chats')||{};const kit=await saveNewAccountKit(pin);$('#createdName').textContent=name;$('#createdShort').textContent=me.shortId;$('#createdQr').src=`/api/qr?text=${encodeURIComponent(inviteLink())}`;$('#createdRecovery').value=kit;showStep('createdStep')
 }
-async function restoreAccountFromKit(){const raw=$('#restoreKitInput').value.trim(),pin=$('#restorePin').value.trim();const {state}=await decryptAccountRecoveryKit(raw,pin);await setKV('identity',state.identity);await setKV('profile',state.profile||{displayName:'FREE'});await setKV('contacts',state.contacts||{});await setKV('chats',state.chats||{});await setKV('accountRecoveryKit',raw);location.reload()}
+async function restoreAccountFromKit(){
+ const raw=$('#restoreKitInput').value.trim(),pin=$('#restorePin').value.trim(),progress=$('#restoreProgress'),btn=$('#restoreAccount');
+ if(progress)progress.textContent=currentLang==='vi'?'Đang xác minh Recovery Kit…':'Verifying Recovery Kit…';
+ if(btn)btn.disabled=true;
+ try{
+  const {state}=await decryptAccountRecoveryKit(raw,pin);
+  if(state.identity?.cryptoSuite!==CRYPTO_SUITE)throw new Error(currentLang==='vi'?'Recovery Kit này không dùng FREE-PQ1.':'This Recovery Kit does not use FREE-PQ1.');
+  const restoredProfile=state.profile||{displayName:'FREE'},restoredContacts=state.contacts||{},restoredChats=state.chats||{};
+  await setKV('identity',state.identity);await setKV('profile',restoredProfile);await setKV('contacts',restoredContacts);await setKV('chats',restoredChats);await setKV('accountRecoveryKit',raw);
+  me=wrapIdentity(state.identity);profile=restoredProfile;contacts=restoredContacts;chats=restoredChats;selectedId=null;
+  $('#restorePin').value='';$('#restoreKitInput').value='';
+  if(progress)progress.textContent=currentLang==='vi'?`Đã khôi phục ${me.shortId}. Đang kết nối FREE…`:`Restored ${me.shortId}. Connecting to FREE…`;
+  showApp();
+ }finally{if(btn)btn.disabled=false}
+}
 
 async function refreshChain(){try{const r=await fetch('/api/chain',{cache:'no-store'});if(!r.ok)return;const c=await r.json();$('#chainHeight').textContent=String(c.height??0);$('#founderAddress').textContent=c.addresses?.founder||'—';$('#founderBalance').textContent=`${Number(c.balances?.founder||0).toFixed(6)} FREE`;$('#genesisHash').textContent=c.genesisHash||'—';$('#latestBlockHash').textContent=c.latestBlockHash||'—';const secs=Math.max(0,Math.ceil((Number(c.nextEpochAt||0)-Date.now())/1000));$('#chainNextEpoch').textContent=`Testnet · reward epoch tiếp theo ~ ${secs}s`; }catch(e){console.warn('chain status',e)}}
 function bootReady(){const b=$('#bootFallback');if(b)b.hidden=true}
-function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');b.querySelector('span').textContent=`FREE-015 không khởi động được: ${e?.message||e}`;b.querySelector('small').textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
+function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');b.querySelector('span').textContent=`FREE-016 không khởi động được: ${e?.message||e}`;b.querySelector('small').textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
 
 async function init(){
  currentLang=localStorage.getItem('free-lang')||((navigator.language||'').toLowerCase().startsWith('vi')?'vi':'en');setLanguage(currentLang);db=await openDB();

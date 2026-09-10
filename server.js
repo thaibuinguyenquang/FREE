@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-015';
+const VERSION = 'FREE-016';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -221,7 +221,7 @@ async function handlePeerMessage(ws, raw) {
   if(msg.type==='peer-list'&&Array.isArray(msg.peers)){for(const u of msg.peers.slice(0,64)){if(typeof u==='string'&&u&&u!==PUBLIC_NODE_URL)knownPeerUrls.add(u)};schedulePeerConnections();return}
   if(msg.type==='federated-route'&&typeof msg.routeId==='string'&&validId(msg.to)&&msg.msg){
     if(seenFederatedRoutes.has(msg.routeId))return; seenFederatedRoutes.set(msg.routeId,Date.now());
-    const local=clients.get(msg.to.toLowerCase()); if(local&&!local.destroyed){wsSend(local,msg.msg);return}
+    const local=clients.get(msg.to.toLowerCase()); if(socketOpen(local)){wsSend(local,msg.msg);return}
     if(Number(msg.ttl)>0) broadcastPeers({...msg,ttl:Number(msg.ttl)-1},peerId); return;
   }
   if(msg.type==='card-request'&&typeof msg.requestId==='string'&&validId(msg.id)){
@@ -271,7 +271,7 @@ function queueFor(to, msg){
 function route(to,msg,{queue=true}={}){
   if(!validId(to)) return false;
   const target=clients.get(to.toLowerCase());
-  if(target && !target.destroyed){ wsSend(target,msg); return true; }
+  if(socketOpen(target)){ wsSend(target,msg); return true; }
   if(routeFederated(to,msg)) return true;
   if(queue) queueFor(to,msg);
   return false;
@@ -305,7 +305,7 @@ const server = http.createServer(async (req,res)=>{
     const host=req.headers.host||`localhost:${PORT}`; const url=new URL(req.url,`http://${host}`);
     if(url.pathname==='/health'){
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:clients.size,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size}));
+      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:clients.size,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',clientAuth:'ML-DSA-65',clientWebSocket:'ws-library',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size}));
     }
     if(url.pathname==='/api/card'){
       const id=(url.searchParams.get('id')||'').toLowerCase();
@@ -346,69 +346,73 @@ const server = http.createServer(async (req,res)=>{
   }catch(e){console.error('http error:',e.message);res.writeHead(500);res.end('server error')}
 });
 
-function wsSend(socket,obj){
-  if(!socket||socket.destroyed)return; const data=Buffer.from(JSON.stringify(obj)); let header;
-  if(data.length<126)header=Buffer.from([0x81,data.length]);
-  else if(data.length<65536){header=Buffer.alloc(4);header[0]=0x81;header[1]=126;header.writeUInt16BE(data.length,2)}
-  else{header=Buffer.alloc(10);header[0]=0x81;header[1]=127;header.writeBigUInt64BE(BigInt(data.length),2)}
-  socket.write(Buffer.concat([header,data]));
-}
-function parseFrames(buffer){
-  const frames=[];let offset=0;
-  while(offset+2<=buffer.length){const b1=buffer[offset],b2=buffer[offset+1],opcode=b1&15,masked=!!(b2&128);let len=b2&127,h=2;if(!masked)throw new Error('client frames must be masked');if(len===126){if(offset+4>buffer.length)break;len=buffer.readUInt16BE(offset+2);h=4}else if(len===127){if(offset+10>buffer.length)break;const big=buffer.readBigUInt64BE(offset+2);if(big>BigInt(MAX_FRAME_BYTES))throw new Error('too large');len=Number(big);h=10}if(len>MAX_FRAME_BYTES)throw new Error('too large');if(offset+h+4+len>buffer.length)break;const mask=buffer.subarray(offset+h,offset+h+4),payload=Buffer.from(buffer.subarray(offset+h+4,offset+h+4+len));for(let i=0;i<payload.length;i++)payload[i]^=mask[i%4];frames.push({opcode,payload});offset+=h+4+len}return{frames,rest:buffer.subarray(offset)};
-}
-function originAllowed(req){const origin=req.headers.origin;if(!origin)return true;if(ALLOWED_ORIGINS.length)return ALLOWED_ORIGINS.includes(origin);try{return new URL(origin).host===req.headers.host}catch{return false}}
+const browserWss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES });
+function socketOpen(ws){return !!ws && ws.readyState===WebSocket.OPEN}
+function wsSend(ws,obj){try{if(socketOpen(ws))ws.send(JSON.stringify(obj))}catch{}}
+function closeClient(ws){try{ws.close(1000,'replaced')}catch{try{ws.terminate()}catch{}}}
 
-server.on('upgrade',(req,socket)=>{
+async function handleClientConnection(socket, req){
+  const ip=clientIp(req); let id=null; let authenticated=false;
+  const challenge=crypto.randomBytes(32).toString('base64url');
+  socket.freeChallenge=challenge;
+  wsSend(socket,{type:'challenge',challenge,version:VERSION,auth:'FREE-AUTH-1'});
+  const authDeadline=setTimeout(()=>{if(!authenticated){wsSend(socket,{type:'auth-error',reason:'auth-timeout'});try{socket.close(4001,'auth timeout')}catch{}}},45000);
+  authDeadline.unref?.();
+
+  socket.on('message',async raw=>{
+    try{
+      if(!rateOK(`ws:${ip}`,WS_RATE_PER_MIN)){socket.close(4008,'rate limit');return}
+      let msg; try{msg=JSON.parse(String(raw))}catch{return}
+      if(msg?.type==='hello-auth'){
+        if(authenticated)return;
+        if(!safeHelloAuth(msg)){wsSend(socket,{type:'auth-error',reason:'invalid-auth-shape'});return}
+        if(msg.challenge!==challenge){wsSend(socket,{type:'auth-error',reason:'challenge-mismatch'});return}
+        const card=msg.card,expected=pqIdentityId(card),authBytes=Buffer.from(`FREE-AUTH-1:${msg.id}:${msg.challenge}`,'utf8');
+        if(expected!==msg.id.toLowerCase()){wsSend(socket,{type:'auth-error',reason:'identity-card-mismatch'});return}
+        if(!(await verifyPqSignatureBytes(msg.signature,authBytes,card.sigPublicKey))){wsSend(socket,{type:'auth-error',reason:'signature-invalid'});return}
+        id=msg.id.toLowerCase(); authenticated=true; clearTimeout(authDeadline);
+        const prior=clients.get(id); if(prior&&prior!==socket)closeClient(prior);
+        clients.set(id,socket); contactCards.set(id,card); saveCards(); announcePresence(id,true);
+        wsSend(socket,{type:'hello-ok',id,serverTime:Date.now(),version:VERSION});
+        const queued=offlineQueue[id]||[]; delete offlineQueue[id]; saveQueue(); for(const q of queued)wsSend(socket,q);
+        return;
+      }
+      if(!authenticated||!id)return;
+      if(msg.type==='storage-advertise'){
+        if(msg.enabled){storageNodes.add(id);if(validNodeId(msg.nodeId)){const svc=serviceFor(msg.nodeId,id);svc.capacityMb=Math.max(0,Math.min(102400,Number(msg.capacityMb)||0));svc.lastSeen=Date.now();socket.freeNodeServiceId=msg.nodeId;}}
+        else storageNodes.delete(id);
+        const svc=socket.freeNodeServiceId?nodeServices.get(socket.freeNodeServiceId):null;
+        wsSend(socket,{type:'storage-status',enabled:storageNodes.has(id),available:storageNodes.size,service:svc?publicService(svc):null});return;
+      }
+      if(msg.type==='storage-peers'){const peers=[...storageNodes].filter(x=>x!==id && clients.has(x)).slice(0,20);wsSend(socket,{type:'storage-peers',requestId:msg.requestId,peers});return}
+      if(safeEnvelope(msg)&&msg.from.toLowerCase()===id){const online=route(msg.to,msg,{queue:true});wsSend(socket,{type:'ack',msgId:msg.payload.msgId,queued:!online});return}
+      if(safeContactCard(msg)&&msg.from.toLowerCase()===id){route(msg.to,msg,{queue:true});return}
+      if(safeVaultStore(msg)&&msg.from.toLowerCase()===id){const online=route(msg.to,msg,{queue:false});wsSend(socket,{type:'vault-route-ack',cid:msg.cid,to:msg.to,online});return}
+      if(safeVaultFetch(msg)&&msg.from.toLowerCase()===id){route(msg.to,msg,{queue:false});return}
+      if(safeVaultResponse(msg)&&msg.from.toLowerCase()===id){route(msg.to,msg,{queue:false});return}
+      if(msg.type==='vault-store-ack'&&validId(msg.to)&&validId(msg.from)&&msg.from.toLowerCase()===id&&validCid(msg.cid)){
+        const sid=socket.freeNodeServiceId,svc=sid&&nodeServices.get(sid);
+        if(svc&&!svc.rewardedCids.has(msg.cid)){svc.rewardedCids.add(msg.cid);const bytes=Math.max(1,Math.min(700000,Number(msg.bytes)||1));svc.storedBytes+=bytes;svc.receipts++;svc.credits+=(bytes/1048576)*SERVICE_CREDIT_PER_MIB;svc.lastSeen=Date.now();wsSend(socket,{type:'service-credit',service:publicService(svc),reason:'encrypted-storage-receipt'});}
+        route(msg.to,msg,{queue:false});return;
+      }
+      if(msg.type==='delivery'&&validId(msg.to)&&validId(msg.from)&&msg.from.toLowerCase()===id&&typeof msg.msgId==='string'){route(msg.to,msg,{queue:true});return}
+    }catch(err){console.warn('client ws error:',err?.message||err);try{socket.close(1011,'server error')}catch{}}
+  });
+  const cleanup=()=>{clearTimeout(authDeadline);if(id&&clients.get(id)===socket){clients.delete(id);announcePresence(id,false)}if(id)storageNodes.delete(id)};
+  socket.on('close',cleanup); socket.on('error',cleanup);
+}
+
+server.on('upgrade',(req,socket,head)=>{
   const ip=clientIp(req);
   try{
     const host=req.headers.host||`localhost:${PORT}`,url=new URL(req.url,`http://${host}`);
     if(url.pathname==='/federation'){
       if(!req.headers['sec-websocket-key']||!rateOK(`federation-upgrade:${ip}`,60))return socket.destroy();
-      return federationWss.handleUpgrade(req,socket,Buffer.alloc(0),ws=>{attachPeerSocket(ws);signedNodeHello().then(x=>peerSend(ws,x)).catch(()=>{try{ws.close()}catch{}})});
+      return federationWss.handleUpgrade(req,socket,head,ws=>{attachPeerSocket(ws);signedNodeHello().then(x=>peerSend(ws,x)).catch(()=>{try{ws.close()}catch{}})});
     }
     if(url.pathname!=='/ws'||!req.headers['sec-websocket-key']||!originAllowed(req)||!rateOK(`upgrade:${ip}`,30))return socket.destroy();
-    const accept=crypto.createHash('sha1').update(req.headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
-    socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+accept+'\r\n\r\n');
-    const challenge=crypto.randomBytes(32).toString('base64url');
-    wsSend(socket,{type:'challenge',challenge,version:VERSION});
-    let id=null,buf=Buffer.alloc(0);
-    socket.on('data',async chunk=>{
-      try{
-        if(!rateOK(`ws:${ip}`,WS_RATE_PER_MIN))throw new Error('ws rate limit'); buf=Buffer.concat([buf,chunk]); if(buf.length>MAX_FRAME_BYTES*2)throw new Error('buffer too large');
-        const parsed=parseFrames(buf);buf=parsed.rest;
-        for(const f of parsed.frames){
-          if(f.opcode===0x8){socket.end();return} if(f.opcode===0x9){socket.write(Buffer.from([0x8A,0x00]));continue} if(f.opcode!==0x1||f.payload.length>MAX_FRAME_BYTES)continue;
-          let msg;try{msg=JSON.parse(f.payload.toString('utf8'))}catch{continue}
-          if(msg?.type==='hello-auth'){
-            if(!safeHelloAuth(msg)){wsSend(socket,{type:'auth-error',reason:'invalid-auth-shape'});continue}
-            if(msg.challenge!==challenge){wsSend(socket,{type:'auth-error',reason:'challenge-mismatch'});continue}
-            const card=msg.card,expected=pqIdentityId(card),authBytes=Buffer.from(`FREE-AUTH-1:${msg.id}:${msg.challenge}`,'utf8');
-            if(expected!==msg.id.toLowerCase()){wsSend(socket,{type:'auth-error',reason:'identity-card-mismatch'});continue}
-            if(!(await verifyPqSignatureBytes(msg.signature,authBytes,card.sigPublicKey))){wsSend(socket,{type:'auth-error',reason:'signature-invalid'});continue}
-            id=msg.id.toLowerCase();const prior=clients.get(id);if(prior&&prior!==socket&&!prior.destroyed)prior.destroy();clients.set(id,socket);contactCards.set(id,card);saveCards();announcePresence(id,true);wsSend(socket,{type:'hello-ok',id,serverTime:Date.now(),version:VERSION});const queued=offlineQueue[id]||[];delete offlineQueue[id];saveQueue();for(const q of queued)wsSend(socket,q);continue;
-          }
-          if(!id)continue;
-          if(msg.type==='storage-advertise'){
-            if(msg.enabled){storageNodes.add(id);if(validNodeId(msg.nodeId)){const svc=serviceFor(msg.nodeId,id);svc.capacityMb=Math.max(0,Math.min(102400,Number(msg.capacityMb)||0));svc.lastSeen=Date.now();socket.freeNodeServiceId=msg.nodeId;}}
-            else {storageNodes.delete(id);}
-            const svc=socket.freeNodeServiceId?nodeServices.get(socket.freeNodeServiceId):null;
-            wsSend(socket,{type:'storage-status',enabled:storageNodes.has(id),available:storageNodes.size,service:svc?publicService(svc):null});continue}
-          if(msg.type==='storage-peers'){const peers=[...storageNodes].filter(x=>x!==id && clients.has(x)).slice(0,20);wsSend(socket,{type:'storage-peers',requestId:msg.requestId,peers});continue}
-          if(safeEnvelope(msg)&&msg.from.toLowerCase()===id){const online=route(msg.to,msg,{queue:true});wsSend(socket,{type:'ack',msgId:msg.payload.msgId,queued:!online});continue}
-          if(safeContactCard(msg)&&msg.from.toLowerCase()===id){route(msg.to,msg,{queue:true});continue}
-          if(safeVaultStore(msg)&&msg.from.toLowerCase()===id){const online=route(msg.to,msg,{queue:false});wsSend(socket,{type:'vault-route-ack',cid:msg.cid,to:msg.to,online});continue}
-          if(safeVaultFetch(msg)&&msg.from.toLowerCase()===id){route(msg.to,msg,{queue:false});continue}
-          if(safeVaultResponse(msg)&&msg.from.toLowerCase()===id){route(msg.to,msg,{queue:false});continue}
-          if(msg.type==='vault-store-ack'&&validId(msg.to)&&validId(msg.from)&&msg.from.toLowerCase()===id&&validCid(msg.cid)){
-            const sid=socket.freeNodeServiceId,svc=sid&&nodeServices.get(sid);
-            if(svc&&!svc.rewardedCids.has(msg.cid)){svc.rewardedCids.add(msg.cid);const bytes=Math.max(1,Math.min(700000,Number(msg.bytes)||1));svc.storedBytes+=bytes;svc.receipts++;svc.credits+=(bytes/1048576)*SERVICE_CREDIT_PER_MIB;svc.lastSeen=Date.now();wsSend(socket,{type:'service-credit',service:publicService(svc),reason:'encrypted-storage-receipt'});}
-            route(msg.to,msg,{queue:false});continue}
-          if(msg.type==='delivery'&&validId(msg.to)&&validId(msg.from)&&msg.from.toLowerCase()===id&&typeof msg.msgId==='string'){route(msg.to,msg,{queue:true});continue}
-        }
-      }catch(err){console.warn('ws closed:',err.message);socket.destroy()}
-    });
-    const cleanup=()=>{if(id&&clients.get(id)===socket){clients.delete(id);announcePresence(id,false)}if(id)storageNodes.delete(id)};socket.on('close',cleanup);socket.on('error',cleanup);
+    browserWss.handleUpgrade(req,socket,head,ws=>handleClientConnection(ws,req));
   }catch{socket.destroy()}
 });
+
 (async()=>{await initNodeIdentity();await freeChain.init();freeChain.start();server.listen(PORT,'0.0.0.0',()=>{console.log(`${VERSION} node ${NODE_ID} running on port ${PORT}`);console.log(`FREE Chain genesis ${freeChain.chain.blocks[0].hash}`);schedulePeerConnections()})})().catch(err=>{console.error('fatal startup:',err);process.exit(1)});

@@ -40,10 +40,18 @@ FREE-013 intentionally creates `free-testnet-2` instead of editing the historica
 
 The 500,000,000 FREE Genesis supply is fully conserved in balances: 75,000,000 belongs to the Founder Genesis Economic Identity and the remaining 425,000,000 sits in a locked **Genesis Reserve**. That reserve is intentionally unallocated until simulation determines a defensible mainnet distribution; it is not Founder property. This avoids pretending that undecided Node/Ecosystem/Treasury/Community percentages are already final tokenomics.
 
-## FREE-015
-FREE-015 focuses on a usable post-quantum messenger and the foundation for independently operated FREE nodes. It preserves FREE-013 Testnet-2 economics: 500,000,000 FREE Genesis supply, 75,000,000 FREE Founder Genesis allocation, 2.5% default gross issuance, 4% hard ceiling, and burn accounting without claiming fee burn is implemented.
+## FREE-016
+FREE-016 focuses on a usable post-quantum messenger and the foundation for independently operated FREE nodes. It preserves FREE-013 Testnet-2 economics: 500,000,000 FREE Genesis supply, 75,000,000 FREE Founder Genesis allocation, 2.5% default gross issuance, 4% hard ceiling, and burn accounting without claiming fee burn is implemented.
 
 Changes in this version include persistent public PQ contact cards, reconnect retry for locally retained encrypted outgoing envelopes, and ML-DSA-65-authenticated federation node handshakes with node IDs derived from PQ public keys. These features do not yet make FREE a production decentralized blockchain: validator consensus, Sybil resistance, production metadata privacy, a production PQ ratchet, and audited security remain future work.
 
-### Messenger-first UX in FREE-015
+### Messenger-first UX in FREE-016
 The default product surface is now Chats / People / Network / Settings. Chain, node accounting, storage contribution and cryptographic implementation details are removed from the everyday chat surface and placed behind Network/Settings. Onboarding transitions to the app at the top of the viewport instead of continuing as a long scrolling technical page. PQ relay authentication now allows a longer startup window and remains visibly fail-closed rather than pretending a timed-out session is connected.
+
+
+## FREE-016 reliability milestone
+- Account Recovery now validates the Recovery Kit, restores state in place, and enters Messenger without a reload.
+- Browser client transport now uses the maintained `ws` WebSocket implementation on the server instead of a hand-written WebSocket frame parser.
+- PQ login remains fail-closed: a client is marked connected only after ML-DSA-65 challenge verification succeeds.
+- Reconnect/auth timeouts are explicit and recover automatically; `/health` exposes `clientAuth` and `clientWebSocket` for deployment verification.
+- Testnet-2 economics and Founder Genesis allocation are unchanged.
