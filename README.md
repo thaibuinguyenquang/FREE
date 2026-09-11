@@ -1,6 +1,6 @@
-# FREE-032 — Easy Recovery Messenger
+# FREE-033 — Easy Recovery Messenger
 
-FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-032 keeps the FREE-PQ1 messenger, encrypted archive and FREE Chain testnet while simplifying ordinary-user recovery to FREE Name + 10-digit Secret + PIN. Advanced cryptographic recovery remains available for node/farm/treasury identities.
+FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-033 keeps the FREE-PQ1 messenger, encrypted archive and FREE Chain testnet while simplifying ordinary-user recovery to FREE Name + 10-digit Secret + PIN. Advanced cryptographic recovery remains available for node/farm/treasury identities.
 
 ## FREE Chain now exists as a testnet ledger
 
@@ -123,9 +123,13 @@ FREE-031 separates account recovery from long-term history recovery. New compact
 
 The current professional gateway remains a testnet storage service, not decentralized durable storage. Persistent disk, independent replicas, possession/retrieval challenges, anti-Sybil scoring and chain settlement remain required before production PoUS claims.
 
-## FREE-032 — Easy Recovery UX
+## FREE-033 — Easy Recovery UX
 
 - Messenger users restore with a memorable `FREE Name` such as `thai.free`, a masked 10-digit Secret, and a 4–6 digit PIN.
 - The 10-digit Secret and PIN do **not** replace the underlying high-entropy cryptographic Recovery Secret. The client wraps that cryptographic secret locally and the relay stores only the encrypted wrapper plus the public lookup name.
 - Recovery Address / Recovery Secret / legacy kits remain available under **Advanced Recovery** for node, farm, treasury and high-value economic identities.
 - Easy Recovery v1 is a testnet usability layer. It uses PBKDF2-SHA-512 and client-side encryption; a future threshold/PAKE design is required before calling low-entropy recovery production-grade. FREE has no plaintext PIN endpoint and no master reset key.
+
+
+## FREE-033 — Startup regression fix
+FREE-033 fixes the FREE-032 browser boot regression where `refreshChain()` and `bootError()` were accidentally omitted while their call sites remained. This caused `ReferenceError: refreshChain is not defined` and then masked the startup diagnostic with `bootError is not defined`. The functions are restored with null-safe DOM updates. Easy Recovery, encrypted archive, account identity, FREE Chain state, Founder Genesis, and existing browser data formats are unchanged. A missing account-vault response remains non-fatal and is treated as an empty remote vault rather than a boot failure.

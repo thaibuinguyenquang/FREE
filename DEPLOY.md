@@ -47,9 +47,9 @@ After deployment, verify at 100% browser zoom that the message composer remains 
 
 
 ## FREE-031 restore/archive verification
-After deployment, keep `FOUNDER_GENESIS_SECRET` unchanged. Verify `/health` reports `FREE-032` and `encryptedArchive.chunks > 0`. For the clean-device test, restore with Recovery Address + Recovery Secret + PIN in a fresh browser profile. After `connected · PQ`, the client should hydrate contacts/history from the encrypted network archive. Do not clear the only remaining browser copy of data until the archive restore has been verified.
+After deployment, keep `FOUNDER_GENESIS_SECRET` unchanged. Verify `/health` reports `FREE-033` and `encryptedArchive.chunks > 0`. For the clean-device test, restore with Recovery Address + Recovery Secret + PIN in a fresh browser profile. After `connected · PQ`, the client should hydrate contacts/history from the encrypted network archive. Do not clear the only remaining browser copy of data until the archive restore has been verified.
 
-## FREE-032 — Easy Recovery UX
+## FREE-033 — Easy Recovery UX
 
 - Messenger users restore with a memorable `FREE Name` such as `thai.free`, a masked 10-digit Secret, and a 4–6 digit PIN.
 - The 10-digit Secret and PIN do **not** replace the underlying high-entropy cryptographic Recovery Secret. The client wraps that cryptographic secret locally and the relay stores only the encrypted wrapper plus the public lookup name.

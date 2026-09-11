@@ -55,7 +55,7 @@ Compact Recovery restores account authority (PQ identity + recovery secret/PIN b
 
 Archive manifests use revision 2 semantics: content chunks deduplicate by CID; message entries deduplicate by `msgId`; attempting to bind an existing `msgId` to a different CID is rejected.
 
-## FREE-032 — Easy Recovery UX
+## FREE-033 — Easy Recovery UX
 
 - Messenger users restore with a memorable `FREE Name` such as `thai.free`, a masked 10-digit Secret, and a 4–6 digit PIN.
 - The 10-digit Secret and PIN do **not** replace the underlying high-entropy cryptographic Recovery Secret. The client wraps that cryptographic secret locally and the relay stores only the encrypted wrapper plus the public lookup name.

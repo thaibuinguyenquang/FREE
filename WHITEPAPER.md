@@ -1,6 +1,6 @@
 # FREE White Paper
 
-**Living document — updated through FREE-032 Private Alpha**
+**Living document — updated through FREE-033 Private Alpha**
 
 ## Abstract
 FREE is a post-quantum-native private communication protocol, decentralized node network, distributed encrypted-storage system and native economic network. The FREE application is the first client, not the owner of the network. Users own their cryptographic identities, keys and data. Network operators may contribute useful resources and receive protocol rewards. Economic and upgrade authority can evolve the network without granting any authority over user plaintext or private keys.
@@ -196,9 +196,13 @@ The encrypted message archive derives an AES-256-GCM archive key from domain-sep
 
 **Privacy boundary.** FREE Chain does not contain messages or archive ciphertext. The testnet gateway can observe account-to-CID storage metadata and timing, so metadata privacy is not yet complete. Production distributed storage still requires independent replicas/erasure coding, randomized possession/retrieval challenges, repair, anti-Sybil controls and reward settlement.
 
-## FREE-032 — Easy Recovery UX
+## FREE-033 — Easy Recovery UX
 
 - Messenger users restore with a memorable `FREE Name` such as `thai.free`, a masked 10-digit Secret, and a 4–6 digit PIN.
 - The 10-digit Secret and PIN do **not** replace the underlying high-entropy cryptographic Recovery Secret. The client wraps that cryptographic secret locally and the relay stores only the encrypted wrapper plus the public lookup name.
 - Recovery Address / Recovery Secret / legacy kits remain available under **Advanced Recovery** for node, farm, treasury and high-value economic identities.
 - Easy Recovery v1 is a testnet usability layer. It uses PBKDF2-SHA-512 and client-side encryption; a future threshold/PAKE design is required before calling low-entropy recovery production-grade. FREE has no plaintext PIN endpoint and no master reset key.
+
+
+## FREE-033 — Startup reliability
+**IMPLEMENTED / TESTNET.** FREE-033 is a targeted startup regression fix. It restores the chain-status refresh and boot-diagnostic helpers that were accidentally omitted from the FREE-032 browser bundle. No cryptographic format, Easy Recovery model, account identity, archive format, tokenomics, or chain-state rule changes in this release.

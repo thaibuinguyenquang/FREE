@@ -5,7 +5,7 @@ const dbName = 'free-v01'; // compatibility container; FREE-007 keeps the same I
 const CRYPTO_SUITE = 'FREE-PQ1';
 const KEM_NAME = 'ML-KEM-768';
 const SIG_NAME = 'ML-DSA-65';
-const APP_VERSION='FREE-032';
+const APP_VERSION='FREE-033';
 let db, me=null, profile=null, ws=null, selectedId=null;
 let contacts={}, chats={}, blockedIds={}, pendingVault=new Map(), pendingArchive=new Map();
 let readReceiptsEnabled=true,appLockEnabled=false,deviceId='',isUnlocked=false;
@@ -290,6 +290,10 @@ async function restoreAccountFromKit(){
   progress.textContent=currentLang==='vi'?`Đã khôi phục ${me.shortId}. Đang kết nối và tải lịch sử mã hóa…`:`Restored ${me.shortId}. Connecting and loading encrypted history…`;$('#onboarding').hidden=true;$('#appShell').hidden=false;renderIdentity();renderContacts();renderChat();await connect();
  }finally{if(btn)btn.disabled=false}
 }
+async function refreshChain(){try{const r=await fetch('/api/chain',{cache:'no-store'});if(!r.ok)return;const c=await r.json();const h=$('#chainHeight'),fa=$('#founderAddress'),fb=$('#founderBalance'),gh=$('#genesisHash'),lh=$('#latestBlockHash'),ne=$('#chainNextEpoch');if(h)h.textContent=String(c.height??0);if(fa)fa.textContent=c.addresses?.founder||'—';if(fb)fb.textContent=`${Number(c.balances?.founder||0).toFixed(6)} FREE`;if(gh)gh.textContent=c.genesisHash||'—';if(lh)lh.textContent=c.latestBlockHash||'—';if(ne){const secs=Math.max(0,Math.ceil((Number(c.nextEpochAt||0)-Date.now())/1000));ne.textContent=`Testnet · reward epoch tiếp theo ~ ${secs}s`}}catch(e){console.warn('chain status',e)}}
+function bootReady(){const b=$('#bootFallback');if(b)b.hidden=true}
+function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');const span=b.querySelector('span'),small=b.querySelector('small');if(span)span.textContent=`FREE-033 không khởi động được: ${e?.message||e}`;if(small)small.textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
+
 async function init(){
  currentLang=localStorage.getItem('free-lang')||((navigator.language||'').toLowerCase().startsWith('vi')?'vi':'en');setLanguage(currentLang);db=await openDB();
  const raw=await getKV('identity');profile=await getKV('profile');contacts=await getKV('contacts')||{};chats=await getKV('chats')||{};blockedIds=await getKV('blockedIds')||{};archivedMsgIds=new Set(await getKV('archivedMsgIds')||[]);storageEnabled=!!(await getKV('storageEnabled'));readReceiptsEnabled=(await getKV('readReceiptsEnabled'))!==false;appLockEnabled=!!(await getKV('appLockEnabled'));nodeServiceId=await getKV('nodeServiceId');deviceId=await getKV('deviceId');if(!deviceId){deviceId='DEV-'+[...crypto.getRandomValues(new Uint8Array(10))].map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();await setKV('deviceId',deviceId)};if(!nodeServiceId){nodeServiceId=[...crypto.getRandomValues(new Uint8Array(24))].map(x=>x.toString(16).padStart(2,'0')).join('');await setKV('nodeServiceId',nodeServiceId)}nodeCapacityMb=Number(await getKV('nodeCapacityMb'))||1024;$('#nodeServiceId').textContent=nodeServiceId;$('#nodeCapacity').value=String(nodeCapacityMb);$('#storageToggle').checked=storageEnabled;$('#readReceiptsToggle').checked=readReceiptsEnabled;$('#appLockToggle').checked=appLockEnabled;updateStorageText();renderDeviceList();
