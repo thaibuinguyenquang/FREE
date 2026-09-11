@@ -44,3 +44,14 @@ After deployment, verify at 100% browser zoom that the message composer remains 
 
 ## FREE-030 storage persistence
 `DATA_DIR/storage-chunks` and `DATA_DIR/storage-manifests` contain encrypted archive chunks and account manifests. For continuity across redeploys, `DATA_DIR` must be backed by persistent storage. Without a persistent disk, the professional testnet gateway can lose archived ciphertext on service replacement/redeploy even though the client protocol itself remains content-addressed.
+
+
+## FREE-031 restore/archive verification
+After deployment, keep `FOUNDER_GENESIS_SECRET` unchanged. Verify `/health` reports `FREE-032` and `encryptedArchive.chunks > 0`. For the clean-device test, restore with Recovery Address + Recovery Secret + PIN in a fresh browser profile. After `connected · PQ`, the client should hydrate contacts/history from the encrypted network archive. Do not clear the only remaining browser copy of data until the archive restore has been verified.
+
+## FREE-032 — Easy Recovery UX
+
+- Messenger users restore with a memorable `FREE Name` such as `thai.free`, a masked 10-digit Secret, and a 4–6 digit PIN.
+- The 10-digit Secret and PIN do **not** replace the underlying high-entropy cryptographic Recovery Secret. The client wraps that cryptographic secret locally and the relay stores only the encrypted wrapper plus the public lookup name.
+- Recovery Address / Recovery Secret / legacy kits remain available under **Advanced Recovery** for node, farm, treasury and high-value economic identities.
+- Easy Recovery v1 is a testnet usability layer. It uses PBKDF2-SHA-512 and client-side encryption; a future threshold/PAKE design is required before calling low-entropy recovery production-grade. FREE has no plaintext PIN endpoint and no master reset key.

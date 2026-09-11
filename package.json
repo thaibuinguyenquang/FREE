@@ -1,8 +1,8 @@
 {
   "name": "free-protocol",
-  "version": "0.30.0",
+  "version": "0.32.0",
   "private": true,
-  "description": "FREE-030 post-quantum messenger with reliable HTTP-backed encrypted archive writes, bounded device cache, testnet storage receipts and living Whitepaper web",
+  "description": "FREE-032 post-quantum messenger with Easy Recovery for users and Advanced Recovery for node/farm operators",
   "type": "commonjs",
   "engines": {
     "node": ">=20.19.0"

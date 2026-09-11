@@ -48,3 +48,16 @@ The Messenger shell is also constrained to the dynamic viewport (`100dvh`) with 
 Device storage is now treated as a bounded cache rather than the canonical long-term archive. The client encrypts each message again for archival storage using an account-owned AES-256-GCM archive key derived locally from PQ account secret material. The ciphertext is addressed by SHA-256 CID and uploaded over the authenticated PQ WebSocket session. The storage gateway verifies CID integrity and an ML-DSA-65 account signature before accepting the chunk. Per-account manifests map message IDs to ciphertext CIDs.
 
 The current Render relay is one professional testnet gateway. The wire contract is intentionally node-oriented so later independent storage nodes can implement the same put/get/receipt flow. FREE Chain does not store message chunks. Future PoUS must add randomized possession/retrieval challenges, replication diversity, repair, anti-Sybil controls and chain settlement before rewards can be called production-grade.
+
+
+## FREE-031 archive restore boundary
+Compact Recovery restores account authority (PQ identity + recovery secret/PIN binding). Long-term chat history is a separate encrypted storage concern. After successful PQ authentication the client requests its revisioned archive manifest, retrieves owned ciphertext chunks, derives the archive key locally from account secret material, decrypts locally and merges by immutable `msgId`. The gateway learns ciphertext/CID/account ownership metadata but not message plaintext or the archive key.
+
+Archive manifests use revision 2 semantics: content chunks deduplicate by CID; message entries deduplicate by `msgId`; attempting to bind an existing `msgId` to a different CID is rejected.
+
+## FREE-032 — Easy Recovery UX
+
+- Messenger users restore with a memorable `FREE Name` such as `thai.free`, a masked 10-digit Secret, and a 4–6 digit PIN.
+- The 10-digit Secret and PIN do **not** replace the underlying high-entropy cryptographic Recovery Secret. The client wraps that cryptographic secret locally and the relay stores only the encrypted wrapper plus the public lookup name.
+- Recovery Address / Recovery Secret / legacy kits remain available under **Advanced Recovery** for node, farm, treasury and high-value economic identities.
+- Easy Recovery v1 is a testnet usability layer. It uses PBKDF2-SHA-512 and client-side encryption; a future threshold/PAKE design is required before calling low-entropy recovery production-grade. FREE has no plaintext PIN endpoint and no master reset key.

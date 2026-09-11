@@ -1,6 +1,6 @@
 # FREE White Paper
 
-**Living document — updated through FREE-030 Private Alpha**
+**Living document — updated through FREE-032 Private Alpha**
 
 ## Abstract
 FREE is a post-quantum-native private communication protocol, decentralized node network, distributed encrypted-storage system and native economic network. The FREE application is the first client, not the owner of the network. Users own their cryptographic identities, keys and data. Network operators may contribute useful resources and receive protocol rewards. Economic and upgrade authority can evolve the network without granting any authority over user plaintext or private keys.
@@ -186,3 +186,19 @@ After a positive storage receipt, the browser may retain only the newest 250 mes
 
 ### FREE-030 implementation note
 The encrypted message archive derives an AES-256-GCM archive key from domain-separated account key material. SHA-512 output is explicitly reduced to 256 bits before WebCrypto AES import. Ciphertext remains off-chain; FREE Chain is reserved for proofs, accounting, rewards and protocol state.
+
+
+## 24. FREE-031 — Recovery/Archive separation and versioned manifests
+
+**IMPLEMENTED / TESTNET.** FREE-031 makes the recovery boundary explicit. A compact Recovery credential is for recovering the cryptographic Account Identity and access authority; it is not intended to become an ever-growing container for the user's message history. On a clean restore, history is hydrated after PQ authentication from ciphertext-only account archive manifests/chunks and decrypted only on the client. Legacy recovery payloads remain readable as a migration bridge.
+
+**Versioned archive manifests.** The storage gateway uses revisioned manifests. Chunks remain content-addressed by CID, while each `msgId` is immutable within an account manifest. Re-uploading the same message does not create a second logical history entry; attempting to attach one `msgId` to a different ciphertext CID is rejected. This is deduplication/integrity plumbing, not yet a consensus protocol.
+
+**Privacy boundary.** FREE Chain does not contain messages or archive ciphertext. The testnet gateway can observe account-to-CID storage metadata and timing, so metadata privacy is not yet complete. Production distributed storage still requires independent replicas/erasure coding, randomized possession/retrieval challenges, repair, anti-Sybil controls and reward settlement.
+
+## FREE-032 — Easy Recovery UX
+
+- Messenger users restore with a memorable `FREE Name` such as `thai.free`, a masked 10-digit Secret, and a 4–6 digit PIN.
+- The 10-digit Secret and PIN do **not** replace the underlying high-entropy cryptographic Recovery Secret. The client wraps that cryptographic secret locally and the relay stores only the encrypted wrapper plus the public lookup name.
+- Recovery Address / Recovery Secret / legacy kits remain available under **Advanced Recovery** for node, farm, treasury and high-value economic identities.
+- Easy Recovery v1 is a testnet usability layer. It uses PBKDF2-SHA-512 and client-side encryption; a future threshold/PAKE design is required before calling low-entropy recovery production-grade. FREE has no plaintext PIN endpoint and no master reset key.

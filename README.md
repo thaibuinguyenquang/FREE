@@ -1,6 +1,6 @@
-# FREE-030 — Private Alpha Messenger
+# FREE-032 — Easy Recovery Messenger
 
-FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-023 advances the usable post-quantum messenger while preserving **FREE Chain Freedom Economy Testnet-2** while preserving the FREE-PQ1 communication path and the rule that user secrets never belong to the chain or founder.
+FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-032 keeps the FREE-PQ1 messenger, encrypted archive and FREE Chain testnet while simplifying ordinary-user recovery to FREE Name + 10-digit Secret + PIN. Advanced cryptographic recovery remains available for node/farm/treasury identities.
 
 ## FREE Chain now exists as a testnet ledger
 
@@ -116,3 +116,16 @@ FREE-030 moves encrypted archive writes to a signed same-origin HTTP endpoint so
 
 ## FREE-030 archive key correction
 FREE-030 fixes the encrypted archive ingress root cause found in FREE-029: SHA-512 produces 64 bytes, while AES-256-GCM requires a 32-byte raw key. The archive KDF now domain-separates the account signing secret, hashes with SHA-512, and uses the first 32 bytes as the AES-256 key. This allows archive encryption to complete and the authenticated HTTP archive upload to execute.
+
+
+## FREE-031 — Network archive restore & manifest dedup
+FREE-031 separates account recovery from long-term history recovery. New compact Recovery capsules carry cryptographic account identity/profile authority, while contacts and message history are hydrated after PQ authentication from the ciphertext-only FREE archive/account vault. Existing FREE-ACCOUNT-2 capsules remain readable for migration, but a clean compact restore starts without trusting stale chat history embedded in the capsule. Archive manifests are now revisioned, message IDs are immutable within a manifest, CID storage remains content-addressed, and duplicate re-uploads do not create duplicate history.
+
+The current professional gateway remains a testnet storage service, not decentralized durable storage. Persistent disk, independent replicas, possession/retrieval challenges, anti-Sybil scoring and chain settlement remain required before production PoUS claims.
+
+## FREE-032 — Easy Recovery UX
+
+- Messenger users restore with a memorable `FREE Name` such as `thai.free`, a masked 10-digit Secret, and a 4–6 digit PIN.
+- The 10-digit Secret and PIN do **not** replace the underlying high-entropy cryptographic Recovery Secret. The client wraps that cryptographic secret locally and the relay stores only the encrypted wrapper plus the public lookup name.
+- Recovery Address / Recovery Secret / legacy kits remain available under **Advanced Recovery** for node, farm, treasury and high-value economic identities.
+- Easy Recovery v1 is a testnet usability layer. It uses PBKDF2-SHA-512 and client-side encryption; a future threshold/PAKE design is required before calling low-entropy recovery production-grade. FREE has no plaintext PIN endpoint and no master reset key.

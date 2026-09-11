@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-030';
+const VERSION = 'FREE-032';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -17,10 +17,12 @@ const RECOVERY_DIR = path.join(DATA_DIR, 'recovery-capsules');
 const ACCOUNT_VAULT_DIR = path.join(DATA_DIR, 'account-vaults');
 const ARCHIVE_CHUNK_DIR = path.join(DATA_DIR, 'storage-chunks');
 const ARCHIVE_MANIFEST_DIR = path.join(DATA_DIR, 'storage-manifests');
+const EASY_RECOVERY_DIR = path.join(DATA_DIR, 'easy-recovery');
 fs.mkdirSync(RECOVERY_DIR, { recursive: true });
 fs.mkdirSync(ACCOUNT_VAULT_DIR, { recursive: true });
 fs.mkdirSync(ARCHIVE_CHUNK_DIR, { recursive: true });
 fs.mkdirSync(ARCHIVE_MANIFEST_DIR, { recursive: true });
+fs.mkdirSync(EASY_RECOVERY_DIR, { recursive: true });
 const MAX_FRAME_BYTES = Number(process.env.MAX_FRAME_BYTES || 1024 * 1024);
 const MAX_QUEUE_PER_ID = Number(process.env.MAX_QUEUE_PER_ID || 500);
 const QUEUE_TTL_MS = Number(process.env.QUEUE_TTL_MS || 7 * 24 * 60 * 60 * 1000);
@@ -338,13 +340,18 @@ function safeVaultResponse(x){ return x && x.type==='vault-response' && validId(
 function readJsonBody(req,max=900000){return new Promise((resolve,reject)=>{let size=0,chunks=[];req.on('data',c=>{size+=c.length;if(size>max){reject(new Error('body too large'));req.destroy();return}chunks.push(c)});req.on('end',()=>{try{resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}'))}catch(e){reject(e)}});req.on('error',reject)})}
 function validRecoveryAddress(x){return /^FR-[A-Z2-7]{4}(?:-[A-Z2-7]{4}){4}$/.test(String(x||''))}
 function recoveryFile(address){return path.join(RECOVERY_DIR,address.replace(/-/g,'')+'.json')}
+
+function normalizeEasyName(name){let n=String(name||'').trim().toLowerCase().replace(/^@/,'');if(!n.endsWith('.free'))n+='.free';return n}
+function validEasyName(name){return /^[a-z0-9][a-z0-9._-]{1,27}\.free$/.test(normalizeEasyName(name))}
+function easyRecoveryFile(name){return path.join(EASY_RECOVERY_DIR,crypto.createHash('sha512').update(normalizeEasyName(name)).digest('hex').slice(0,64)+'.json')}
+
 function accountVaultFile(address){return path.join(ACCOUNT_VAULT_DIR,address.replace(/-/g,'')+'.json')}
 function validVaultBlob(x){return x&&x.v===1&&x.suite==='FREE-PQ1'&&validRecoveryAddress(x.address)&&validId(x.accountId)&&Number.isFinite(Number(x.revision))&&Number(x.revision)>=0&&typeof x.iv==='string'&&x.iv.length<256&&typeof x.ciphertext==='string'&&x.ciphertext.length<=1200000&&typeof x.signature==='string'&&x.signature.length<12000}
 function archiveChunkFile(cid){return path.join(ARCHIVE_CHUNK_DIR,cid.toLowerCase()+'.blob')}
 function archiveManifestFile(id){return path.join(ARCHIVE_MANIFEST_DIR,id.toLowerCase()+'.json')}
-function readArchiveManifest(id){try{return JSON.parse(fs.readFileSync(archiveManifestFile(id),'utf8'))}catch{return {v:1,accountId:id,items:[],updatedAt:0}}}
+function readArchiveManifest(id){try{const m=JSON.parse(fs.readFileSync(archiveManifestFile(id),'utf8'));return{v:2,accountId:id,revision:Number(m.revision)||0,items:Array.isArray(m.items)?m.items:[],updatedAt:Number(m.updatedAt)||0}}catch{return {v:2,accountId:id,revision:0,items:[],updatedAt:0}}}
 function saveArchiveManifest(m){atomicWriteJson(archiveManifestFile(m.accountId),m)}
-function archiveStats(){let chunks=0,bytes=0;try{for(const f of fs.readdirSync(ARCHIVE_CHUNK_DIR)){if(!f.endsWith('.blob'))continue;chunks++;bytes+=fs.statSync(path.join(ARCHIVE_CHUNK_DIR,f)).size}}catch{}return{chunks,bytes}}
+function archiveStats(){let chunks=0,bytes=0,manifests=0,items=0;try{for(const f of fs.readdirSync(ARCHIVE_CHUNK_DIR)){if(!f.endsWith('.blob'))continue;chunks++;bytes+=fs.statSync(path.join(ARCHIVE_CHUNK_DIR,f)).size}}catch{}try{for(const f of fs.readdirSync(ARCHIVE_MANIFEST_DIR)){if(!f.endsWith('.json'))continue;manifests++;try{const m=JSON.parse(fs.readFileSync(path.join(ARCHIVE_MANIFEST_DIR,f),'utf8'));items+=Array.isArray(m.items)?m.items.length:0}catch{}}}catch{}return{version:2,chunks,bytes,manifests,items,dedup:'cid+msgId'}}
 
 const server = http.createServer(async (req,res)=>{
   securityHeaders(res);
@@ -367,6 +374,27 @@ const server = http.createServer(async (req,res)=>{
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
       return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:connectedSocketCount(),connectedAccounts:[...clients.keys()].filter(accountOnline).length,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',clientAuth:'ML-DSA-65',clientWebSocket:'ws-library',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size,encryptedArchive:archiveStats()}));
     }
+
+    if(url.pathname==='/api/easy-recovery'){
+      const name=normalizeEasyName(url.searchParams.get('name')||'');
+      if(req.method==='GET'){
+        if(!validEasyName(name)){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'bad FREE Name'}))}
+        try{const rec=JSON.parse(fs.readFileSync(easyRecoveryFile(name),'utf8'));res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({v:1,suite:'FREE-PQ1',name:rec.name,address:rec.address,salt:rec.salt,iv:rec.iv,wrappedSecret:rec.wrappedSecret,updatedAt:rec.updatedAt}))}catch{res.writeHead(404,{'content-type':'application/json'});return res.end(JSON.stringify({error:'FREE Name not found'}))}
+      }
+      if(req.method==='PUT'){
+        if(!originAllowed(req)){res.writeHead(403);return res.end('forbidden')}
+        const body=await readJsonBody(req,300000);const n=normalizeEasyName(body.name);
+        const card=body.card;
+        if(body.v!==1||body.suite!=='FREE-PQ1'||!validEasyName(n)||!validId(body.accountId)||!validRecoveryAddress(body.address)||typeof body.salt!=='string'||typeof body.iv!=='string'||typeof body.wrappedSecret!=='string'||body.wrappedSecret.length>2000||!card||card.id!==body.accountId||pqIdentityId(card)!==body.accountId||typeof body.signature!=='string'){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid Easy Recovery record'}))}
+        const digest=crypto.createHash('sha512').update(Buffer.from(body.wrappedSecret.replace(/-/g,'+').replace(/_/g,'/'),'base64')).digest('hex');const bytes=Buffer.from(`FREE-EASY-RECOVERY-REGISTER-1:${n}:${body.accountId}:${body.address}:${digest}`,'utf8');
+        if(!(await verifyPqSignatureBytes(body.signature,bytes,card.sigPublicKey))){res.writeHead(403,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid Easy Recovery signature'}))}
+        let prev=null;try{prev=JSON.parse(fs.readFileSync(easyRecoveryFile(n),'utf8'))}catch{}
+        if(prev&&prev.accountId!==body.accountId){res.writeHead(409,{'content-type':'application/json'});return res.end(JSON.stringify({error:'FREE Name already taken'}))}
+        atomicWriteJson(easyRecoveryFile(n),{v:1,suite:'FREE-PQ1',name:n,accountId:body.accountId,address:body.address,salt:body.salt,iv:body.iv,wrappedSecret:body.wrappedSecret,updatedAt:Date.now()});res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,name:n}))
+      }
+      res.writeHead(405);return res.end('method not allowed');
+    }
+
     if(url.pathname==='/api/recovery-capsule'){
       const address=String(url.searchParams.get('address')||'').toUpperCase();
       if(req.method==='GET'){
@@ -375,8 +403,8 @@ const server = http.createServer(async (req,res)=>{
       }
       if(req.method==='PUT'){
         if(!originAllowed(req)){res.writeHead(403);return res.end('forbidden')}
-        const body=await readJsonBody(req);if(!validRecoveryAddress(body.address)||body.address!==address||body.v!==2||typeof body.salt!=='string'||typeof body.iv!=='string'||typeof body.ciphertext!=='string'||body.ciphertext.length>800000){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid capsule'}))}
-        atomicWriteJson(recoveryFile(address),{v:2,suite:'FREE-PQ1',address,salt:body.salt,iv:body.iv,ciphertext:body.ciphertext,updatedAt:Date.now()});res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,address}))
+        const body=await readJsonBody(req);if(!validRecoveryAddress(body.address)||body.address!==address||![2,3].includes(Number(body.v))||typeof body.salt!=='string'||typeof body.iv!=='string'||typeof body.ciphertext!=='string'||body.ciphertext.length>800000){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid capsule'}))}
+        atomicWriteJson(recoveryFile(address),{v:Number(body.v)||3,suite:'FREE-PQ1',address,salt:body.salt,iv:body.iv,ciphertext:body.ciphertext,updatedAt:Date.now()});res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,address}))
       }
       res.writeHead(405);return res.end('method not allowed');
     }
@@ -419,7 +447,7 @@ const server = http.createServer(async (req,res)=>{
       if(!(await verifyPqSignatureBytes(body.signature,bytes,card.sigPublicKey))){res.writeHead(403,{'content-type':'application/json'});return res.end(JSON.stringify({error:'signature-invalid'}))}
       if(!fs.existsSync(archiveChunkFile(body.cid)))fs.writeFileSync(archiveChunkFile(body.cid),body.ciphertext,'utf8');
       const m=readArchiveManifest(accountId);
-      if(!(m.items||[]).some(x=>x.msgId===body.msgId)){m.items=(m.items||[]).concat([{msgId:body.msgId,cid:body.cid,bytes:raw.length,storedAt:Date.now()}]).slice(-50000);m.updatedAt=Date.now();saveArchiveManifest(m)}
+      const existing=(m.items||[]).find(x=>x.msgId===body.msgId);if(existing&&existing.cid!==body.cid){res.writeHead(409,{'content-type':'application/json'});return res.end(JSON.stringify({error:'archive-msgid-conflict'}))}if(!existing){m.items=(m.items||[]).concat([{msgId:body.msgId,cid:body.cid,bytes:raw.length,storedAt:Date.now()}]).slice(-50000);m.revision=(Number(m.revision)||0)+1;m.updatedAt=Date.now();saveArchiveManifest(m)}
       res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,msgId:body.msgId,cid:body.cid,bytes:raw.length,proof:'content-addressed-ciphertext-receipt'}))
     }
 
@@ -507,7 +535,7 @@ async function handleClientConnection(socket, req){
       }
       if(msg.type==='device-list-request'){broadcastDeviceList(id);return}
       if(msg.type==='archive-manifest-request'){
-        const m=readArchiveManifest(id);wsSend(socket,{type:'archive-manifest',items:m.items||[],updatedAt:m.updatedAt||0});return;
+        const m=readArchiveManifest(id);wsSend(socket,{type:'archive-manifest',revision:Number(m.revision)||0,items:m.items||[],updatedAt:m.updatedAt||0});return;
       }
       if(msg.type==='archive-get'&&validCid(msg.cid)){
         const m=readArchiveManifest(id);if(!(m.items||[]).some(x=>x.cid===msg.cid)){wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'chunk-not-owned'});return}
@@ -517,7 +545,7 @@ async function handleClientConnection(socket, req){
         const raw=Buffer.from(msg.ciphertext,'base64');const cid=crypto.createHash('sha256').update(raw).digest('hex');if(cid!==msg.cid.toLowerCase()){wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'cid-mismatch'});return}
         const bytes=Buffer.from(`FREE-ARCHIVE-PUT-1:${id}:${msg.msgId}:${msg.cid}:${raw.length}`,'utf8');const card=contactCards.get(id);if(!card||!(await verifyPqSignatureBytes(msg.signature,bytes,card.sigPublicKey))){wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'signature-invalid'});return}
         if(!fs.existsSync(archiveChunkFile(msg.cid)))fs.writeFileSync(archiveChunkFile(msg.cid),msg.ciphertext,'utf8');
-        const m=readArchiveManifest(id);if(!(m.items||[]).some(x=>x.msgId===msg.msgId)){m.items=(m.items||[]).concat([{msgId:msg.msgId,cid:msg.cid,bytes:raw.length,storedAt:Date.now()}]).slice(-50000);m.updatedAt=Date.now();saveArchiveManifest(m)}
+        const m=readArchiveManifest(id);const existing=(m.items||[]).find(x=>x.msgId===msg.msgId);if(existing&&existing.cid!==msg.cid){wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'archive-msgid-conflict'});return}if(!existing){m.items=(m.items||[]).concat([{msgId:msg.msgId,cid:msg.cid,bytes:raw.length,storedAt:Date.now()}]).slice(-50000);m.revision=(Number(m.revision)||0)+1;m.updatedAt=Date.now();saveArchiveManifest(m)}
         wsSend(socket,{type:'archive-stored',requestId:msg.requestId,msgId:msg.msgId,cid:msg.cid,bytes:raw.length,proof:'content-addressed-ciphertext-receipt'});return;
       }
       if(msg.type==='device-revoke'&&validDeviceId(msg.targetDeviceId)&&msg.targetDeviceId!==deviceId&&typeof msg.signature==='string'){const bytes=Buffer.from(`FREE-DEVICE-REVOKE-1:${id}:${msg.targetDeviceId}`,'utf8');if(!(await verifyPqSignatureBytes(msg.signature,bytes,contactCards.get(id)?.sigPublicKey||''))){wsSend(socket,{type:'device-error',reason:'revoke-signature-invalid'});return}deviceRegistry[id]=deviceRegistry[id]||{};const d=deviceRegistry[id][msg.targetDeviceId]||{authorizedAt:0,lastSeen:0};d.revokedAt=Date.now();deviceRegistry[id][msg.targetDeviceId]=d;saveDevices();const target=accountSockets(id).get(msg.targetDeviceId);if(target)try{target.close(4003,'device revoked')}catch{};broadcastDeviceList(id);return}
