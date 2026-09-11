@@ -1,6 +1,6 @@
 # FREE White Paper
 
-**Living document — updated through FREE-033 Private Alpha**
+**Living document — updated through FREE-034 Private Alpha**
 
 ## Abstract
 FREE is a post-quantum-native private communication protocol, decentralized node network, distributed encrypted-storage system and native economic network. The FREE application is the first client, not the owner of the network. Users own their cryptographic identities, keys and data. Network operators may contribute useful resources and receive protocol rewards. Economic and upgrade authority can evolve the network without granting any authority over user plaintext or private keys.
@@ -206,3 +206,7 @@ The encrypted message archive derives an AES-256-GCM archive key from domain-sep
 
 ## FREE-033 — Startup reliability
 **IMPLEMENTED / TESTNET.** FREE-033 is a targeted startup regression fix. It restores the chain-status refresh and boot-diagnostic helpers that were accidentally omitted from the FREE-032 browser bundle. No cryptographic format, Easy Recovery model, account identity, archive format, tokenomics, or chain-state rule changes in this release.
+
+
+## FREE-034 — Easy Recovery bootstrap fix
+FREE-034 fixes a migration edge case for existing Messenger accounts that already have a local Recovery Address/Secret reference but whose recovery capsule is missing from the current network storage. Saving Easy Recovery no longer fails with `Recovery Address not found.` In that specific 404 case, the authenticated local client rebuilds the encrypted recovery capsule from the already-held account identity and existing recovery secret using the PIN the user entered, uploads the capsule, then registers FREE Name + 10-digit Secret + PIN. Existing valid capsules are still decrypted first, so a wrong PIN cannot silently replace a working recovery capsule. Advanced Recovery remains optional for ordinary Messenger users.

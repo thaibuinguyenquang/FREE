@@ -1,4 +1,4 @@
-# FREE-033 — Easy Recovery Messenger
+# FREE-034 — Easy Recovery Messenger
 
 FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-033 keeps the FREE-PQ1 messenger, encrypted archive and FREE Chain testnet while simplifying ordinary-user recovery to FREE Name + 10-digit Secret + PIN. Advanced cryptographic recovery remains available for node/farm/treasury identities.
 
@@ -133,3 +133,7 @@ The current professional gateway remains a testnet storage service, not decentra
 
 ## FREE-033 — Startup regression fix
 FREE-033 fixes the FREE-032 browser boot regression where `refreshChain()` and `bootError()` were accidentally omitted while their call sites remained. This caused `ReferenceError: refreshChain is not defined` and then masked the startup diagnostic with `bootError is not defined`. The functions are restored with null-safe DOM updates. Easy Recovery, encrypted archive, account identity, FREE Chain state, Founder Genesis, and existing browser data formats are unchanged. A missing account-vault response remains non-fatal and is treated as an empty remote vault rather than a boot failure.
+
+
+## FREE-034 — Easy Recovery bootstrap fix
+FREE-034 fixes a migration edge case for existing Messenger accounts that already have a local Recovery Address/Secret reference but whose recovery capsule is missing from the current network storage. Saving Easy Recovery no longer fails with `Recovery Address not found.` In that specific 404 case, the authenticated local client rebuilds the encrypted recovery capsule from the already-held account identity and existing recovery secret using the PIN the user entered, uploads the capsule, then registers FREE Name + 10-digit Secret + PIN. Existing valid capsules are still decrypted first, so a wrong PIN cannot silently replace a working recovery capsule. Advanced Recovery remains optional for ordinary Messenger users.

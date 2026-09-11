@@ -2,7 +2,7 @@
   "name": "free-protocol",
   "version": "0.32.0",
   "private": true,
-  "description": "FREE-033 post-quantum messenger with Easy Recovery for users and Advanced Recovery for node/farm operators",
+  "description": "FREE-034 post-quantum messenger with Easy Recovery for users and Advanced Recovery for node/farm operators",
   "type": "commonjs",
   "engines": {
     "node": ">=20.19.0"
