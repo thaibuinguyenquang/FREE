@@ -67,3 +67,9 @@ Mount `DATA_DIR` on persistent storage before claiming archive durability. Leave
 For recovery repair after upgrading from FREE-034: first open the surviving normal browser that still contains contacts/history and wait until it reaches `connected · PQ`. FREE-035 will fetch the server manifest, detect missing remote entries, reseed encrypted archive chunks, and republish a missing encrypted account vault. Then reload the clean/incognito restored browser and verify contacts/history hydrate from the network. Do not clear the surviving browser until this passes.
 
 FREE-035 includes an account-vault AES-256 key-length correction. Existing missing vaults will be regenerated from the surviving device; there is no compatible remote vault ciphertext to migrate when earlier uploads never succeeded.
+
+
+## FREE-036 — Independent Storage Node testnet
+FREE-036 removes Render local disk from the canonical storage design. A standalone `storage-node.js` connects outbound to the relay over the authenticated PQ WebSocket, so it can run behind ordinary home NAT without opening an inbound port. The relay replicates Easy Recovery records, encrypted recovery capsules, encrypted account vaults, archive manifests, and ciphertext archive chunks to online independent storage nodes. On relay-local cache loss, the relay can fetch those replicas back from an online storage node and rehydrate its cache.
+
+This is a testnet storage transport, not production Proof of Useful Service: one node is not decentralization, replicas are not yet erasure-coded, challenge-based possession/retrieval proofs are not yet implemented, and Test Credits have no monetary value. The storage node never receives user PINs, Recovery Secrets, plaintext messages, or user private keys.

@@ -71,3 +71,9 @@ FREE-035 fixes a migration edge case for existing Messenger accounts that alread
 The local `archivedMsgIds` set is no longer treated as proof that the network still possesses a message. The current server manifest is authoritative. After authentication the client hydrates the manifest before archive writes; messages retained locally but absent from the server manifest are re-encrypted and re-uploaded. A missing account vault can similarly be republished by a surviving device that has meaningful account state. A clean restore with empty state is explicitly prevented from seeding an empty vault. This is a testnet self-healing mechanism, not distributed durability or consensus.
 
 The account-vault KDF is domain-separated (`FREE-VAULT-SYNC-KEY-2`) and reduces SHA-512 output to 32 bytes before AES-256-GCM import. Earlier testnet builds incorrectly passed all 64 digest bytes to WebCrypto.
+
+
+## FREE-036 — Independent Storage Node testnet
+FREE-036 removes Render local disk from the canonical storage design. A standalone `storage-node.js` connects outbound to the relay over the authenticated PQ WebSocket, so it can run behind ordinary home NAT without opening an inbound port. The relay replicates Easy Recovery records, encrypted recovery capsules, encrypted account vaults, archive manifests, and ciphertext archive chunks to online independent storage nodes. On relay-local cache loss, the relay can fetch those replicas back from an online storage node and rehydrate its cache.
+
+This is a testnet storage transport, not production Proof of Useful Service: one node is not decentralization, replicas are not yet erasure-coded, challenge-based possession/retrieval proofs are not yet implemented, and Test Credits have no monetary value. The storage node never receives user PINs, Recovery Secrets, plaintext messages, or user private keys.

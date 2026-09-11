@@ -1,6 +1,6 @@
 # FREE White Paper
 
-**Living document — updated through FREE-035 Private Alpha**
+**Living document — updated through FREE-036 Private Alpha**
 
 ## Abstract
 FREE is a post-quantum-native private communication protocol, decentralized node network, distributed encrypted-storage system and native economic network. The FREE application is the first client, not the owner of the network. Users own their cryptographic identities, keys and data. Network operators may contribute useful resources and receive protocol rewards. Economic and upgrade authority can evolve the network without granting any authority over user plaintext or private keys.
@@ -220,3 +220,9 @@ The same principle applies to the account vault: a missing remote vault may be r
 FREE-035 also exposes an explicit storage-durability status. Hosted storage remains `unconfirmed` unless the operator verifies a persistent `DATA_DIR` mount and deliberately declares it. The declaration is operational metadata, not a cryptographic proof.
 
 **Vault KDF correction.** The account-vault key derivation is domain-separated and explicitly reduced to 256 bits before AES-GCM import. Earlier testnet code attempted to import a full SHA-512 digest as an AES key, which WebCrypto rejects. FREE-035 corrects this and allows the surviving-device vault republish path to execute.
+
+
+## FREE-036 — Independent Storage Node testnet
+FREE-036 removes Render local disk from the canonical storage design. A standalone `storage-node.js` connects outbound to the relay over the authenticated PQ WebSocket, so it can run behind ordinary home NAT without opening an inbound port. The relay replicates Easy Recovery records, encrypted recovery capsules, encrypted account vaults, archive manifests, and ciphertext archive chunks to online independent storage nodes. On relay-local cache loss, the relay can fetch those replicas back from an online storage node and rehydrate its cache.
+
+This is a testnet storage transport, not production Proof of Useful Service: one node is not decentralization, replicas are not yet erasure-coded, challenge-based possession/retrieval proofs are not yet implemented, and Test Credits have no monetary value. The storage node never receives user PINs, Recovery Secrets, plaintext messages, or user private keys.

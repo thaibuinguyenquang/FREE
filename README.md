@@ -1,6 +1,6 @@
-# FREE-035 — Easy Recovery Messenger
+# FREE-036 — Independent Storage Node Testnet
 
-FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-035 keeps the FREE-PQ1 messenger and Easy Recovery while adding self-healing encrypted vault/archive reseeding after remote storage loss. Advanced cryptographic recovery remains available for node/farm/treasury identities.
+FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-036 keeps the FREE-PQ1 messenger and Easy Recovery while adding an independent outbound-connected storage node so Render relay disk is no longer the canonical long-term storage design. Advanced cryptographic recovery remains available for node/farm/treasury identities.
 
 ## FREE Chain now exists as a testnet ledger
 
@@ -147,3 +147,9 @@ The server archive manifest is authoritative for storage receipts. When a client
 `/health` now reports `storageDurability`. It remains `unconfirmed` unless the operator has verified that `DATA_DIR` is mounted on persistent storage and explicitly sets `FREE_PERSISTENT_STORAGE=1`. This flag is an operator declaration, not a cryptographic proof of durability.
 
 FREE-035 also corrects the account-vault AES key import: the previous vault KDF attempted to import the full 64-byte SHA-512 digest as AES-GCM, while AES-256 requires 32 bytes. The new domain-separated vault KDF uses the first 32 bytes, matching AES-256-GCM requirements. This is the same class of bug previously fixed for the message archive in FREE-030 and explains why a missing account vault could persist even while Easy Recovery itself worked.
+
+
+## FREE-036 — Independent Storage Node testnet
+FREE-036 removes Render local disk from the canonical storage design. A standalone `storage-node.js` connects outbound to the relay over the authenticated PQ WebSocket, so it can run behind ordinary home NAT without opening an inbound port. The relay replicates Easy Recovery records, encrypted recovery capsules, encrypted account vaults, archive manifests, and ciphertext archive chunks to online independent storage nodes. On relay-local cache loss, the relay can fetch those replicas back from an online storage node and rehydrate its cache.
+
+This is a testnet storage transport, not production Proof of Useful Service: one node is not decentralization, replicas are not yet erasure-coded, challenge-based possession/retrieval proofs are not yet implemented, and Test Credits have no monetary value. The storage node never receives user PINs, Recovery Secrets, plaintext messages, or user private keys.

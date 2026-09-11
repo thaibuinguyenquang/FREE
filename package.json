@@ -1,8 +1,8 @@
 {
   "name": "free-protocol",
-  "version": "0.35.0",
+  "version": "0.36.0",
   "private": true,
-  "description": "FREE-035 post-quantum messenger with self-healing encrypted vault and archive reseed",
+  "description": "FREE-036 post-quantum messenger with independent outbound-connected storage nodes",
   "type": "commonjs",
   "engines": {
     "node": ">=20.19.0"
@@ -12,8 +12,9 @@
     "start": "node server.js",
     "node": "node server.js",
     "dev": "node server.js",
-    "check": "node --check server.js && node --check public/app.js && node --check scripts/pq-entry.mjs && node --check scripts/build-pq.mjs",
-    "founder:address": "node scripts/founder-wallet.mjs"
+    "check": "node --check server.js && node --check storage-node.js && node --check public/app.js && node --check scripts/pq-entry.mjs && node --check scripts/build-pq.mjs",
+    "founder:address": "node scripts/founder-wallet.mjs",
+    "storage-node": "node storage-node.js"
   },
   "dependencies": {
     "@noble/post-quantum": "0.7.1",
