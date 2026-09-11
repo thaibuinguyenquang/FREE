@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-034';
+const VERSION = 'FREE-035';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -32,6 +32,7 @@ const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || '').split(',').map
 const PUBLIC_NODE_URL = String(process.env.PUBLIC_NODE_URL || '').trim().replace(/\/$/, '');
 const BOOTSTRAP_PEERS = String(process.env.BOOTSTRAP_PEERS || '').split(',').map(s => s.trim()).filter(Boolean);
 const MAX_FEDERATION_PEERS = Number(process.env.MAX_FEDERATION_PEERS || 32);
+const STORAGE_DURABILITY = process.env.FREE_PERSISTENT_STORAGE === '1' ? 'operator-confirmed-persistent' : 'unconfirmed';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 let offlineQueue = {};
@@ -372,7 +373,7 @@ const server = http.createServer(async (req,res)=>{
     }
     if(url.pathname==='/health'){
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:connectedSocketCount(),connectedAccounts:[...clients.keys()].filter(accountOnline).length,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',clientAuth:'ML-DSA-65',clientWebSocket:'ws-library',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size,encryptedArchive:archiveStats()}));
+      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:connectedSocketCount(),connectedAccounts:[...clients.keys()].filter(accountOnline).length,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',clientAuth:'ML-DSA-65',clientWebSocket:'ws-library',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size,encryptedArchive:archiveStats(),storageDurability:{status:STORAGE_DURABILITY,dataDirConfigured:Boolean(process.env.DATA_DIR),warning:STORAGE_DURABILITY==='unconfirmed'?'Archive/vault durability across host replacement or redeploy is not confirmed. Configure a persistent DATA_DIR and set FREE_PERSISTENT_STORAGE=1 only after verifying the disk mount.':null}}));
     }
 
     if(url.pathname==='/api/easy-recovery'){

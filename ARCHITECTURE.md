@@ -63,5 +63,11 @@ Archive manifests use revision 2 semantics: content chunks deduplicate by CID; m
 - Easy Recovery v1 is a testnet usability layer. It uses PBKDF2-SHA-512 and client-side encryption; a future threshold/PAKE design is required before calling low-entropy recovery production-grade. FREE has no plaintext PIN endpoint and no master reset key.
 
 
-## FREE-034 — Easy Recovery bootstrap fix
-FREE-034 fixes a migration edge case for existing Messenger accounts that already have a local Recovery Address/Secret reference but whose recovery capsule is missing from the current network storage. Saving Easy Recovery no longer fails with `Recovery Address not found.` In that specific 404 case, the authenticated local client rebuilds the encrypted recovery capsule from the already-held account identity and existing recovery secret using the PIN the user entered, uploads the capsule, then registers FREE Name + 10-digit Secret + PIN. Existing valid capsules are still decrypted first, so a wrong PIN cannot silently replace a working recovery capsule. Advanced Recovery remains optional for ordinary Messenger users.
+## FREE-035 — Easy Recovery bootstrap fix
+FREE-035 fixes a migration edge case for existing Messenger accounts that already have a local Recovery Address/Secret reference but whose recovery capsule is missing from the current network storage. Saving Easy Recovery no longer fails with `Recovery Address not found.` In that specific 404 case, the authenticated local client rebuilds the encrypted recovery capsule from the already-held account identity and existing recovery secret using the PIN the user entered, uploads the capsule, then registers FREE Name + 10-digit Secret + PIN. Existing valid capsules are still decrypted first, so a wrong PIN cannot silently replace a working recovery capsule. Advanced Recovery remains optional for ordinary Messenger users.
+
+
+## FREE-035 — Surviving-device reseed
+The local `archivedMsgIds` set is no longer treated as proof that the network still possesses a message. The current server manifest is authoritative. After authentication the client hydrates the manifest before archive writes; messages retained locally but absent from the server manifest are re-encrypted and re-uploaded. A missing account vault can similarly be republished by a surviving device that has meaningful account state. A clean restore with empty state is explicitly prevented from seeding an empty vault. This is a testnet self-healing mechanism, not distributed durability or consensus.
+
+The account-vault KDF is domain-separated (`FREE-VAULT-SYNC-KEY-2`) and reduces SHA-512 output to 32 bytes before AES-256-GCM import. Earlier testnet builds incorrectly passed all 64 digest bytes to WebCrypto.

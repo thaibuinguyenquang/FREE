@@ -1,6 +1,6 @@
-# FREE-034 — Easy Recovery Messenger
+# FREE-035 — Easy Recovery Messenger
 
-FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-033 keeps the FREE-PQ1 messenger, encrypted archive and FREE Chain testnet while simplifying ordinary-user recovery to FREE Name + 10-digit Secret + PIN. Advanced cryptographic recovery remains available for node/farm/treasury identities.
+FREE is an experimental post-quantum-native private communication protocol and decentralized network. **FREE app ≠ FREE network.** FREE-035 keeps the FREE-PQ1 messenger and Easy Recovery while adding self-healing encrypted vault/archive reseeding after remote storage loss. Advanced cryptographic recovery remains available for node/farm/treasury identities.
 
 ## FREE Chain now exists as a testnet ledger
 
@@ -135,5 +135,15 @@ The current professional gateway remains a testnet storage service, not decentra
 FREE-033 fixes the FREE-032 browser boot regression where `refreshChain()` and `bootError()` were accidentally omitted while their call sites remained. This caused `ReferenceError: refreshChain is not defined` and then masked the startup diagnostic with `bootError is not defined`. The functions are restored with null-safe DOM updates. Easy Recovery, encrypted archive, account identity, FREE Chain state, Founder Genesis, and existing browser data formats are unchanged. A missing account-vault response remains non-fatal and is treated as an empty remote vault rather than a boot failure.
 
 
-## FREE-034 — Easy Recovery bootstrap fix
-FREE-034 fixes a migration edge case for existing Messenger accounts that already have a local Recovery Address/Secret reference but whose recovery capsule is missing from the current network storage. Saving Easy Recovery no longer fails with `Recovery Address not found.` In that specific 404 case, the authenticated local client rebuilds the encrypted recovery capsule from the already-held account identity and existing recovery secret using the PIN the user entered, uploads the capsule, then registers FREE Name + 10-digit Secret + PIN. Existing valid capsules are still decrypted first, so a wrong PIN cannot silently replace a working recovery capsule. Advanced Recovery remains optional for ordinary Messenger users.
+## FREE-035 — Easy Recovery bootstrap fix
+FREE-035 fixes a migration edge case for existing Messenger accounts that already have a local Recovery Address/Secret reference but whose recovery capsule is missing from the current network storage. Saving Easy Recovery no longer fails with `Recovery Address not found.` In that specific 404 case, the authenticated local client rebuilds the encrypted recovery capsule from the already-held account identity and existing recovery secret using the PIN the user entered, uploads the capsule, then registers FREE Name + 10-digit Secret + PIN. Existing valid capsules are still decrypted first, so a wrong PIN cannot silently replace a working recovery capsule. Advanced Recovery remains optional for ordinary Messenger users.
+
+
+## FREE-035 — Self-healing network backup
+FREE-035 fixes the failure mode observed after a clean Easy Recovery restore: Account Identity restored correctly, while `/api/account-vault` returned 404 and the archive manifest returned revision 0. A surviving browser can now reseed the network without asking the user to rebuild contacts manually.
+
+The server archive manifest is authoritative for storage receipts. When a client receives a manifest, it replaces stale local `archivedMsgIds` with the message IDs actually present on the server. Any locally retained message missing from that manifest is re-encrypted and uploaded again. If the remote account vault is missing, a device with meaningful local contacts/history schedules an encrypted vault republish; an empty freshly restored device does not publish an empty vault. Archive sync waits for the server manifest first, preventing a race with stale local receipt state.
+
+`/health` now reports `storageDurability`. It remains `unconfirmed` unless the operator has verified that `DATA_DIR` is mounted on persistent storage and explicitly sets `FREE_PERSISTENT_STORAGE=1`. This flag is an operator declaration, not a cryptographic proof of durability.
+
+FREE-035 also corrects the account-vault AES key import: the previous vault KDF attempted to import the full 64-byte SHA-512 digest as AES-GCM, while AES-256 requires 32 bytes. The new domain-separated vault KDF uses the first 32 bytes, matching AES-256-GCM requirements. This is the same class of bug previously fixed for the message archive in FREE-030 and explains why a missing account vault could persist even while Easy Recovery itself worked.

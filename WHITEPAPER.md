@@ -1,6 +1,6 @@
 # FREE White Paper
 
-**Living document — updated through FREE-034 Private Alpha**
+**Living document — updated through FREE-035 Private Alpha**
 
 ## Abstract
 FREE is a post-quantum-native private communication protocol, decentralized node network, distributed encrypted-storage system and native economic network. The FREE application is the first client, not the owner of the network. Users own their cryptographic identities, keys and data. Network operators may contribute useful resources and receive protocol rewards. Economic and upgrade authority can evolve the network without granting any authority over user plaintext or private keys.
@@ -208,5 +208,15 @@ The encrypted message archive derives an AES-256-GCM archive key from domain-sep
 **IMPLEMENTED / TESTNET.** FREE-033 is a targeted startup regression fix. It restores the chain-status refresh and boot-diagnostic helpers that were accidentally omitted from the FREE-032 browser bundle. No cryptographic format, Easy Recovery model, account identity, archive format, tokenomics, or chain-state rule changes in this release.
 
 
-## FREE-034 — Easy Recovery bootstrap fix
-FREE-034 fixes a migration edge case for existing Messenger accounts that already have a local Recovery Address/Secret reference but whose recovery capsule is missing from the current network storage. Saving Easy Recovery no longer fails with `Recovery Address not found.` In that specific 404 case, the authenticated local client rebuilds the encrypted recovery capsule from the already-held account identity and existing recovery secret using the PIN the user entered, uploads the capsule, then registers FREE Name + 10-digit Secret + PIN. Existing valid capsules are still decrypted first, so a wrong PIN cannot silently replace a working recovery capsule. Advanced Recovery remains optional for ordinary Messenger users.
+## FREE-035 — Easy Recovery bootstrap fix
+FREE-035 fixes a migration edge case for existing Messenger accounts that already have a local Recovery Address/Secret reference but whose recovery capsule is missing from the current network storage. Saving Easy Recovery no longer fails with `Recovery Address not found.` In that specific 404 case, the authenticated local client rebuilds the encrypted recovery capsule from the already-held account identity and existing recovery secret using the PIN the user entered, uploads the capsule, then registers FREE Name + 10-digit Secret + PIN. Existing valid capsules are still decrypted first, so a wrong PIN cannot silently replace a working recovery capsule. Advanced Recovery remains optional for ordinary Messenger users.
+
+
+## 27. FREE-035 — Self-healing encrypted backup after gateway data loss
+**IMPLEMENTED / TESTNET.** FREE-035 distinguishes a local storage receipt from present network possession. A client no longer assumes that a message is safe merely because it was archived in an earlier session. After authentication, the current archive manifest becomes the authority for what the gateway presently claims to hold. A surviving device can reseed ciphertext for locally retained messages absent from that manifest.
+
+The same principle applies to the account vault: a missing remote vault may be republished only by a device that still has meaningful local account state. A newly restored empty device is prevented from publishing an empty vault simply because the remote vault is absent. This reduces destructive recovery races while preserving ciphertext-only server storage. It does not solve distributed durability; independent storage nodes, replication, possession/retrieval challenges and repair remain required.
+
+FREE-035 also exposes an explicit storage-durability status. Hosted storage remains `unconfirmed` unless the operator verifies a persistent `DATA_DIR` mount and deliberately declares it. The declaration is operational metadata, not a cryptographic proof.
+
+**Vault KDF correction.** The account-vault key derivation is domain-separated and explicitly reduced to 256 bits before AES-GCM import. Earlier testnet code attempted to import a full SHA-512 digest as an AES key, which WebCrypto rejects. FREE-035 corrects this and allows the surviving-device vault republish path to execute.

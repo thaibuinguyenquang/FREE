@@ -47,7 +47,7 @@ After deployment, verify at 100% browser zoom that the message composer remains 
 
 
 ## FREE-031 restore/archive verification
-After deployment, keep `FOUNDER_GENESIS_SECRET` unchanged. Verify `/health` reports `FREE-033` and `encryptedArchive.chunks > 0`. For the clean-device test, restore with Recovery Address + Recovery Secret + PIN in a fresh browser profile. After `connected · PQ`, the client should hydrate contacts/history from the encrypted network archive. Do not clear the only remaining browser copy of data until the archive restore has been verified.
+After deployment, keep `FOUNDER_GENESIS_SECRET` unchanged. Verify `/health` reports `FREE-035`. `encryptedArchive.chunks` may initially be 0 after gateway data loss; the surviving browser should reseed it after manifest hydration. For the clean-device test, restore with Recovery Address + Recovery Secret + PIN in a fresh browser profile. After `connected · PQ`, the client should hydrate contacts/history from the encrypted network archive. Do not clear the only remaining browser copy of data until the archive restore has been verified.
 
 ## FREE-033 — Easy Recovery UX
 
@@ -57,5 +57,13 @@ After deployment, keep `FOUNDER_GENESIS_SECRET` unchanged. Verify `/health` repo
 - Easy Recovery v1 is a testnet usability layer. It uses PBKDF2-SHA-512 and client-side encryption; a future threshold/PAKE design is required before calling low-entropy recovery production-grade. FREE has no plaintext PIN endpoint and no master reset key.
 
 
-## FREE-034 — Easy Recovery bootstrap fix
-FREE-034 fixes a migration edge case for existing Messenger accounts that already have a local Recovery Address/Secret reference but whose recovery capsule is missing from the current network storage. Saving Easy Recovery no longer fails with `Recovery Address not found.` In that specific 404 case, the authenticated local client rebuilds the encrypted recovery capsule from the already-held account identity and existing recovery secret using the PIN the user entered, uploads the capsule, then registers FREE Name + 10-digit Secret + PIN. Existing valid capsules are still decrypted first, so a wrong PIN cannot silently replace a working recovery capsule. Advanced Recovery remains optional for ordinary Messenger users.
+## FREE-035 — Easy Recovery bootstrap fix
+FREE-035 fixes a migration edge case for existing Messenger accounts that already have a local Recovery Address/Secret reference but whose recovery capsule is missing from the current network storage. Saving Easy Recovery no longer fails with `Recovery Address not found.` In that specific 404 case, the authenticated local client rebuilds the encrypted recovery capsule from the already-held account identity and existing recovery secret using the PIN the user entered, uploads the capsule, then registers FREE Name + 10-digit Secret + PIN. Existing valid capsules are still decrypted first, so a wrong PIN cannot silently replace a working recovery capsule. Advanced Recovery remains optional for ordinary Messenger users.
+
+
+## FREE-035 deployment / durability check
+Mount `DATA_DIR` on persistent storage before claiming archive durability. Leave `FREE_PERSISTENT_STORAGE=0` until the mount has been verified across a deployment/restart that would otherwise replace ephemeral storage. After verification, set `FREE_PERSISTENT_STORAGE=1`. `/health.storageDurability` exposes the declared state.
+
+For recovery repair after upgrading from FREE-034: first open the surviving normal browser that still contains contacts/history and wait until it reaches `connected · PQ`. FREE-035 will fetch the server manifest, detect missing remote entries, reseed encrypted archive chunks, and republish a missing encrypted account vault. Then reload the clean/incognito restored browser and verify contacts/history hydrate from the network. Do not clear the surviving browser until this passes.
+
+FREE-035 includes an account-vault AES-256 key-length correction. Existing missing vaults will be regenerated from the surviving device; there is no compatible remote vault ciphertext to migrate when earlier uploads never succeeded.
