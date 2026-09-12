@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-036';
+const VERSION = 'FREE-037';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -347,9 +347,11 @@ function readJsonBody(req,max=900000){return new Promise((resolve,reject)=>{let 
 function validRecoveryAddress(x){return /^FR-[A-Z2-7]{4}(?:-[A-Z2-7]{4}){4}$/.test(String(x||''))}
 function recoveryFile(address){return path.join(RECOVERY_DIR,address.replace(/-/g,'')+'.json')}
 
-function normalizeEasyName(name){let n=String(name||'').trim().toLowerCase().replace(/^@/,'');if(!n.endsWith('.free'))n+='.free';return n}
-function validEasyName(name){return /^[a-z0-9][a-z0-9._-]{1,27}\.free$/.test(normalizeEasyName(name))}
+function normalizeEasyName(name){return String(name||'').trim().toLowerCase().replace(/^@/,'')}
+function validEasyName(name){return /^[a-z0-9][a-z0-9._-]{1,31}$/.test(normalizeEasyName(name))}
+function easyNameCandidates(name){const n=normalizeEasyName(name),out=[];if(validEasyName(n))out.push(n);if(n.endsWith('.free')){const legacyBase=n.slice(0,-5);if(validEasyName(legacyBase)&&!out.includes(legacyBase))out.push(legacyBase)}else{const legacy=n+'.free';if(validEasyName(legacy)&&!out.includes(legacy))out.push(legacy)}return out}
 function easyRecoveryFile(name){return path.join(EASY_RECOVERY_DIR,crypto.createHash('sha512').update(normalizeEasyName(name)).digest('hex').slice(0,64)+'.json')}
+async function readEasyRecovery(name){for(const candidate of easyNameCandidates(name)){let rec=null;try{rec=JSON.parse(fs.readFileSync(easyRecoveryFile(candidate),'utf8'))}catch{rec=await replicaGet('easy-recovery',candidate);if(rec)try{atomicWriteJson(easyRecoveryFile(candidate),rec)}catch{}}if(rec)return{rec,resolvedName:candidate}}return null}
 
 function accountVaultFile(address){return path.join(ACCOUNT_VAULT_DIR,address.replace(/-/g,'')+'.json')}
 function validVaultBlob(x){return x&&x.v===1&&x.suite==='FREE-PQ1'&&validRecoveryAddress(x.address)&&validId(x.accountId)&&Number.isFinite(Number(x.revision))&&Number(x.revision)>=0&&typeof x.iv==='string'&&x.iv.length<256&&typeof x.ciphertext==='string'&&x.ciphertext.length<=1200000&&typeof x.signature==='string'&&x.signature.length<12000}
@@ -385,7 +387,7 @@ const server = http.createServer(async (req,res)=>{
       const name=normalizeEasyName(url.searchParams.get('name')||'');
       if(req.method==='GET'){
         if(!validEasyName(name)){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'bad FREE Name'}))}
-        let rec=null;try{rec=JSON.parse(fs.readFileSync(easyRecoveryFile(name),'utf8'))}catch{rec=await replicaGet('easy-recovery',name);if(rec)try{atomicWriteJson(easyRecoveryFile(name),rec)}catch{}}if(rec){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({v:1,suite:'FREE-PQ1',name:rec.name,address:rec.address,salt:rec.salt,iv:rec.iv,wrappedSecret:rec.wrappedSecret,updatedAt:rec.updatedAt}))}res.writeHead(404,{'content-type':'application/json'});return res.end(JSON.stringify({error:'FREE Name not found'}))
+        const hit=await readEasyRecovery(name);if(hit?.rec){const rec=hit.rec;res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({v:1,suite:'FREE-PQ1',name:rec.name||hit.resolvedName,requestedName:name,resolvedName:hit.resolvedName,address:rec.address,salt:rec.salt,iv:rec.iv,wrappedSecret:rec.wrappedSecret,updatedAt:rec.updatedAt}))}res.writeHead(404,{'content-type':'application/json'});return res.end(JSON.stringify({error:'FREE Name not found'}))
       }
       if(req.method==='PUT'){
         if(!originAllowed(req)){res.writeHead(403);return res.end('forbidden')}
@@ -394,9 +396,9 @@ const server = http.createServer(async (req,res)=>{
         if(body.v!==1||body.suite!=='FREE-PQ1'||!validEasyName(n)||!validId(body.accountId)||!validRecoveryAddress(body.address)||typeof body.salt!=='string'||typeof body.iv!=='string'||typeof body.wrappedSecret!=='string'||body.wrappedSecret.length>2000||!card||card.id!==body.accountId||pqIdentityId(card)!==body.accountId||typeof body.signature!=='string'){res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid Easy Recovery record'}))}
         const digest=crypto.createHash('sha512').update(Buffer.from(body.wrappedSecret.replace(/-/g,'+').replace(/_/g,'/'),'base64')).digest('hex');const bytes=Buffer.from(`FREE-EASY-RECOVERY-REGISTER-1:${n}:${body.accountId}:${body.address}:${digest}`,'utf8');
         if(!(await verifyPqSignatureBytes(body.signature,bytes,card.sigPublicKey))){res.writeHead(403,{'content-type':'application/json'});return res.end(JSON.stringify({error:'invalid Easy Recovery signature'}))}
-        let prev=null;try{prev=JSON.parse(fs.readFileSync(easyRecoveryFile(n),'utf8'))}catch{}
+        const previousHit=await readEasyRecovery(n);const prev=previousHit?.rec||null;
         if(prev&&prev.accountId!==body.accountId){res.writeHead(409,{'content-type':'application/json'});return res.end(JSON.stringify({error:'FREE Name already taken'}))}
-        const easyRec={v:1,suite:'FREE-PQ1',name:n,accountId:body.accountId,address:body.address,salt:body.salt,iv:body.iv,wrappedSecret:body.wrappedSecret,updatedAt:Date.now()};atomicWriteJson(easyRecoveryFile(n),easyRec);replicaPut('easy-recovery',n,easyRec);res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,name:n}))
+        const easyRec={v:1,suite:'FREE-PQ1',name:n,accountId:body.accountId,address:body.address,salt:body.salt,iv:body.iv,wrappedSecret:body.wrappedSecret,updatedAt:Date.now()};atomicWriteJson(easyRecoveryFile(n),easyRec);const replicatedTo=replicaPut('easy-recovery',n,easyRec);res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,name:n,replicatedTo}))
       }
       res.writeHead(405);return res.end('method not allowed');
     }

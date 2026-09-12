@@ -5,7 +5,7 @@ const {WebSocket}=require('ws');
 const {ml_kem768}=require('@noble/post-quantum/ml-kem.js');
 const {ml_dsa65}=require('@noble/post-quantum/ml-dsa.js');
 
-const VERSION='FREE-036';
+const VERSION='FREE-037';
 const RELAY=String(process.env.FREE_RELAY_URL||'https://free-relay.onrender.com').replace(/\/$/,'');
 const WS_URL=RELAY.replace(/^http/,'ws')+'/ws';
 const DATA_DIR=path.resolve(process.env.FREE_STORAGE_DATA_DIR||path.join(__dirname,'free-storage-data'));

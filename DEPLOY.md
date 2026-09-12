@@ -51,7 +51,7 @@ After deployment, keep `FOUNDER_GENESIS_SECRET` unchanged. Verify `/health` repo
 
 ## FREE-033 — Easy Recovery UX
 
-- Messenger users restore with a memorable `FREE Name` such as `thai.free`, a masked 10-digit Secret, and a 4–6 digit PIN.
+- Messenger users restore with a memorable `FREE Name` such as `free.genesis`, a masked 10-digit Secret, and a 4–6 digit PIN.
 - The 10-digit Secret and PIN do **not** replace the underlying high-entropy cryptographic Recovery Secret. The client wraps that cryptographic secret locally and the relay stores only the encrypted wrapper plus the public lookup name.
 - Recovery Address / Recovery Secret / legacy kits remain available under **Advanced Recovery** for node, farm, treasury and high-value economic identities.
 - Easy Recovery v1 is a testnet usability layer. It uses PBKDF2-SHA-512 and client-side encryption; a future threshold/PAKE design is required before calling low-entropy recovery production-grade. FREE has no plaintext PIN endpoint and no master reset key.
@@ -73,3 +73,7 @@ FREE-035 includes an account-vault AES-256 key-length correction. Existing missi
 FREE-036 removes Render local disk from the canonical storage design. A standalone `storage-node.js` connects outbound to the relay over the authenticated PQ WebSocket, so it can run behind ordinary home NAT without opening an inbound port. The relay replicates Easy Recovery records, encrypted recovery capsules, encrypted account vaults, archive manifests, and ciphertext archive chunks to online independent storage nodes. On relay-local cache loss, the relay can fetch those replicas back from an online storage node and rehydrate its cache.
 
 This is a testnet storage transport, not production Proof of Useful Service: one node is not decentralization, replicas are not yet erasure-coded, challenge-based possession/retrieval proofs are not yet implemented, and Test Credits have no monetary value. The storage node never receives user PINs, Recovery Secrets, plaintext messages, or user private keys.
+
+
+## FREE-037 — Exact Easy Recovery names and legacy recovery lookup
+FREE-037 removes automatic `.free` suffix insertion from the Messenger recovery UX. A FREE Name is now the exact memorable string the user chooses after lowercase/trim normalization (for example `free.genesis`). The relay searches both the exact name and the legacy `.free` alias so FREE-032–036 records can still be restored. When a legacy record is found, the client derives the wrapping key using the record's original cryptographic name, while retaining the user's requested exact name locally for future migration. Easy Recovery records continue to replicate to independent FREE Storage Nodes; relay-local disk remains a cache, not the canonical long-term store. This is testnet recovery infrastructure, not yet a production threshold/PAKE recovery system.
