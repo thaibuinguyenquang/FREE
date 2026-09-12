@@ -26,3 +26,13 @@ footer a{color:inherit;text-underline-offset:3px}
 
 /* FREE-027 interaction polish */
 .step,.app-view,.free-app{will-change:opacity,transform}.step input:focus,.settings-card input:focus,.composer input:focus{border-color:#666;box-shadow:0 0 0 3px rgba(255,255,255,.045)}button{transition:background-color .16s ease,border-color .16s ease,color .16s ease,transform .12s ease}button:active{transform:scale(.985)}@media(prefers-reduced-motion:reduce){button{transition:none}.step,.app-view,.free-app{will-change:auto}}
+
+
+/* FREE-038 responsive viewport hardening: login/restore must remain usable at 100% zoom. */
+html,body{min-height:100%;height:auto}
+body:has(.onboarding:not([hidden])){overflow:auto!important}
+.onboarding{min-height:100dvh;height:auto;overflow:visible;padding:max(18px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom))}
+.onboard-card{max-height:none;margin:auto}
+.step{min-height:0}
+@media(max-height:760px){.onboarding{place-items:start center}.onboard-card{padding:22px 26px;border-radius:22px}.onboard-tag{margin-bottom:18px}.step h1{font-size:25px;margin:5px 0 8px}.step label{margin:11px 0 6px}.step input{padding:11px 13px}.wide{margin-top:9px}}
+@media(max-width:760px){html,body{overflow:auto}.free-app{height:100dvh;min-height:0;padding:0 8px}.appbar{flex:0 0 58px}.app-view{overscroll-behavior:contain}.messenger-layout.chat-open .conversation{inset:110px 8px max(8px,env(safe-area-inset-bottom))}.conversation .messages{padding:16px 12px}.conversation .composer{padding:10px;padding-bottom:max(10px,env(safe-area-inset-bottom))}.onboarding{padding-left:10px;padding-right:10px}.onboard-card{padding:20px 16px;border-radius:22px}.lang-switch{right:8px;bottom:max(8px,env(safe-area-inset-bottom))}}

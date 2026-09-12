@@ -5,7 +5,7 @@ const dbName = 'free-v01'; // compatibility container; FREE-007 keeps the same I
 const CRYPTO_SUITE = 'FREE-PQ1';
 const KEM_NAME = 'ML-KEM-768';
 const SIG_NAME = 'ML-DSA-65';
-const APP_VERSION='FREE-037';
+const APP_VERSION='FREE-038';
 let db, me=null, profile=null, ws=null, selectedId=null;
 let contacts={}, chats={}, blockedIds={}, pendingVault=new Map(), pendingArchive=new Map();
 let readReceiptsEnabled=true,appLockEnabled=false,deviceId='',isUnlocked=false;
@@ -293,7 +293,7 @@ async function restoreAccountFromKit(){
 }
 async function refreshChain(){try{const r=await fetch('/api/chain',{cache:'no-store'});if(!r.ok)return;const c=await r.json();const h=$('#chainHeight'),fa=$('#founderAddress'),fb=$('#founderBalance'),gh=$('#genesisHash'),lh=$('#latestBlockHash'),ne=$('#chainNextEpoch');if(h)h.textContent=String(c.height??0);if(fa)fa.textContent=c.addresses?.founder||'—';if(fb)fb.textContent=`${Number(c.balances?.founder||0).toFixed(6)} FREE`;if(gh)gh.textContent=c.genesisHash||'—';if(lh)lh.textContent=c.latestBlockHash||'—';if(ne){const secs=Math.max(0,Math.ceil((Number(c.nextEpochAt||0)-Date.now())/1000));ne.textContent=`Testnet · reward epoch tiếp theo ~ ${secs}s`}}catch(e){console.warn('chain status',e)}}
 function bootReady(){const b=$('#bootFallback');if(b)b.hidden=true}
-function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');const span=b.querySelector('span'),small=b.querySelector('small');if(span)span.textContent=`FREE-037 không khởi động được: ${e?.message||e}`;if(small)small.textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
+function bootError(e){const b=$('#bootFallback');if(!b)return;b.classList.add('error');const span=b.querySelector('span'),small=b.querySelector('small');if(span)span.textContent=`FREE-038 không khởi động được: ${e?.message||e}`;if(small)small.textContent='Không xóa dữ liệu trình duyệt. Hãy chụp màn hình lỗi này để chẩn đoán.'}
 
 async function init(){
  currentLang=localStorage.getItem('free-lang')||((navigator.language||'').toLowerCase().startsWith('vi')?'vi':'en');setLanguage(currentLang);db=await openDB();

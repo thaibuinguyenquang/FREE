@@ -1,6 +1,6 @@
 # FREE White Paper
 
-**Living document — updated through FREE-037 Private Alpha**
+**Living document — updated through FREE-038 Private Alpha**
 
 ## Abstract
 FREE is a post-quantum-native private communication protocol, decentralized node network, distributed encrypted-storage system and native economic network. The FREE application is the first client, not the owner of the network. Users own their cryptographic identities, keys and data. Network operators may contribute useful resources and receive protocol rewards. Economic and upgrade authority can evolve the network without granting any authority over user plaintext or private keys.
@@ -228,5 +228,12 @@ FREE-036 removes Render local disk from the canonical storage design. A standalo
 This is a testnet storage transport, not production Proof of Useful Service: one node is not decentralization, replicas are not yet erasure-coded, challenge-based possession/retrieval proofs are not yet implemented, and Test Credits have no monetary value. The storage node never receives user PINs, Recovery Secrets, plaintext messages, or user private keys.
 
 
-## FREE-037 — Exact Easy Recovery names and legacy recovery lookup
-FREE-037 removes automatic `.free` suffix insertion from the Messenger recovery UX. A FREE Name is now the exact memorable string the user chooses after lowercase/trim normalization (for example `free.genesis`). The relay searches both the exact name and the legacy `.free` alias so FREE-032–036 records can still be restored. When a legacy record is found, the client derives the wrapping key using the record's original cryptographic name, while retaining the user's requested exact name locally for future migration. Easy Recovery records continue to replicate to independent FREE Storage Nodes; relay-local disk remains a cache, not the canonical long-term store. This is testnet recovery infrastructure, not yet a production threshold/PAKE recovery system.
+## FREE-038 — Exact Easy Recovery names and legacy recovery lookup
+FREE-038 removes automatic `.free` suffix insertion from the Messenger recovery UX. A FREE Name is now the exact memorable string the user chooses after lowercase/trim normalization (for example `free.genesis`). The relay searches both the exact name and the legacy `.free` alias so FREE-032–036 records can still be restored. When a legacy record is found, the client derives the wrapping key using the record's original cryptographic name, while retaining the user's requested exact name locally for future migration. Easy Recovery records continue to replicate to independent FREE Storage Nodes; relay-local disk remains a cache, not the canonical long-term store. This is testnet recovery infrastructure, not yet a production threshold/PAKE recovery system.
+
+
+## Network Retrieval — FREE-038 testnet
+
+FREE treats relay disk as non-canonical. An archive manifest maps message identifiers to immutable ciphertext CIDs. When a client requests a CID that is absent from relay-local storage, the relay routes a retrieval request to currently connected independent Storage Nodes. A node returns only the stored ciphertext replica; decryption remains exclusively client-side. The relay may route bytes in transit but does not need to rebuild the entire archive on its own disk.
+
+This closes the first write → independent replica → relay-loss → network-read loop. It does **not** yet prove production durability. Mainnet-grade Proof of Useful Service still requires multiple independent replicas, randomized possession/retrieval challenges, repair, anti-Sybil controls, service-quality scoring, and economic settlement on FREE Chain.

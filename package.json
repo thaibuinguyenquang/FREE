@@ -1,8 +1,8 @@
 {
   "name": "free-protocol",
-  "version": "0.37.0",
+  "version": "0.38.0",
   "private": true,
-  "description": "FREE-037 post-quantum messenger with exact Easy Recovery names and storage-node recovery lookup",
+  "description": "FREE-038 post-quantum messenger with exact Easy Recovery names and storage-node recovery lookup",
   "type": "commonjs",
   "engines": {
     "node": ">=20.19.0"

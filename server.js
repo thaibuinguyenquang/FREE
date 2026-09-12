@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const { WebSocketServer, WebSocket } = require('ws');
 const pqModule = import('@noble/post-quantum/ml-dsa.js');
 
-const VERSION = 'FREE-037';
+const VERSION = 'FREE-038';
 const { FreeChain } = require('./chain/chain');
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -105,9 +105,10 @@ try{const saved=JSON.parse(fs.readFileSync(CARD_FILE,'utf8'));for(const [id,card
 function saveCards(){try{const obj={};for(const [id,card] of contactCards)obj[id]=card;atomicWriteJson(CARD_FILE,obj)}catch(err){console.error('card persistence error:',err.message)}}
 const storageNodes = new Set();
 const replicaPending = new Map();
+const retrievalStats={requests:0,hits:0,misses:0,lastHitAt:0,lastCid:null};
 function storageSockets(){const out=[];for(const id of storageNodes)for(const ws of accountSockets(id).values())if(socketOpen(ws)&&ws.freeNodeServiceId)out.push(ws);return out}
 function replicaPut(namespace,key,value){const peers=storageSockets();for(const ws of peers)wsSend(ws,{type:'replica-put',namespace,key,value});return peers.length}
-function replicaGet(namespace,key,timeoutMs=1200){const peers=storageSockets();if(!peers.length)return Promise.resolve(null);const requestId=crypto.randomUUID();return new Promise(resolve=>{const rec={resolve,values:[]};replicaPending.set(requestId,rec);for(const ws of peers)wsSend(ws,{type:'replica-get',requestId,namespace,key});setTimeout(()=>{if(replicaPending.delete(requestId))resolve(rec.values[0]??null)},timeoutMs).unref()})}
+function replicaGet(namespace,key,timeoutMs=5000){const peers=storageSockets();if(!peers.length)return Promise.resolve(null);const requestId=crypto.randomUUID();return new Promise(resolve=>{const rec={resolve,values:[]};replicaPending.set(requestId,rec);for(const ws of peers)wsSend(ws,{type:'replica-get',requestId,namespace,key});setTimeout(()=>{if(replicaPending.delete(requestId))resolve(rec.values[0]??null)},timeoutMs).unref()})}
 function replicaResolve(msg){const p=replicaPending.get(msg.requestId);if(!p)return;if(msg.found&&msg.value!=null){p.values.push(msg.value);replicaPending.delete(msg.requestId);p.resolve(msg.value)}}
 // FREE-008 testnet contribution accounting. Credits have NO monetary value.
 // Account identity, node identity and future payment identity are separate namespaces.
@@ -380,7 +381,7 @@ const server = http.createServer(async (req,res)=>{
     }
     if(url.pathname==='/health'){
       res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:connectedSocketCount(),connectedAccounts:[...clients.keys()].filter(accountOnline).length,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',clientAuth:'ML-DSA-65',clientWebSocket:'ws-library',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size,encryptedArchive:archiveStats(),networkStorage:{onlineNodes:storageSockets().length,mode:'outbound-connected-independent-nodes',relayDiskCanonical:false},storageDurability:{status:storageSockets().length?'network-replicated-testnet':STORAGE_DURABILITY,dataDirConfigured:Boolean(process.env.DATA_DIR),warning:storageSockets().length?null:'No independent FREE Storage Node is online; relay-local archive/vault data can disappear on redeploy.'}}));
+      return res.end(JSON.stringify({ok:true,service:'FREE relay',version:VERSION,connected:connectedSocketCount(),connectedAccounts:[...clients.keys()].filter(accountOnline).length,storageNodes:storageNodes.size,nodeId:NODE_ID,federationPeers:peerSockets.size,knownPeers:knownPeerUrls.size,federationAuth:'ML-DSA-65',clientAuth:'ML-DSA-65',clientWebSocket:'ws-library',queued:Object.values(offlineQueue).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0),economy:'testnet-inflation-accounting',economicPolicy:ECON_POLICY.id,economicEpoch:econState.epoch,freeChain:freeChain.chain?freeChain.publicSummary():{status:'starting'},contributingNodes:nodeServices.size,encryptedArchive:archiveStats(),networkStorage:{onlineNodes:storageSockets().length,mode:'outbound-connected-independent-nodes',relayDiskCanonical:false,retrieval:{...retrievalStats}},storageDurability:{status:storageSockets().length?'network-replicated-testnet':STORAGE_DURABILITY,dataDirConfigured:Boolean(process.env.DATA_DIR),warning:storageSockets().length?null:'No independent FREE Storage Node is online; relay-local archive/vault data can disappear on redeploy.'}}));
     }
 
     if(url.pathname==='/api/easy-recovery'){
@@ -549,7 +550,7 @@ async function handleClientConnection(socket, req){
       }
       if(msg.type==='archive-get'&&validCid(msg.cid)){
         const m=readArchiveManifest(id);if(!(m.items||[]).some(x=>x.cid===msg.cid)){wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'chunk-not-owned'});return}
-        let ciphertext=null;try{ciphertext=fs.readFileSync(archiveChunkFile(msg.cid),'utf8')}catch{ciphertext=await replicaGet('archive-chunk',msg.cid);if(ciphertext)try{fs.writeFileSync(archiveChunkFile(msg.cid),ciphertext,'utf8')}catch{}}if(ciphertext)wsSend(socket,{type:'archive-chunk',requestId:msg.requestId,cid:msg.cid,ciphertext});else wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'chunk-missing'});return;
+        let ciphertext=null,source='relay-cache';try{ciphertext=fs.readFileSync(archiveChunkFile(msg.cid),'utf8')}catch{source='storage-node';retrievalStats.requests++;ciphertext=await replicaGet('archive-chunk',msg.cid,5000);if(ciphertext){retrievalStats.hits++;retrievalStats.lastHitAt=Date.now();retrievalStats.lastCid=msg.cid}else retrievalStats.misses++}if(ciphertext)wsSend(socket,{type:'archive-chunk',requestId:msg.requestId,cid:msg.cid,ciphertext,source});else wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'chunk-missing'});return;
       }
       if(msg.type==='archive-put'&&validCid(msg.cid)&&typeof msg.ciphertext==='string'&&msg.ciphertext.length<=900000&&typeof msg.msgId==='string'&&msg.msgId.length<=128&&typeof msg.signature==='string'){
         const raw=Buffer.from(msg.ciphertext,'base64');const cid=crypto.createHash('sha256').update(raw).digest('hex');if(cid!==msg.cid.toLowerCase()){wsSend(socket,{type:'archive-error',requestId:msg.requestId,reason:'cid-mismatch'});return}
