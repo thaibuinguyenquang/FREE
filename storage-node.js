@@ -5,10 +5,12 @@ const {WebSocket}=require('ws');
 const {ml_kem768}=require('@noble/post-quantum/ml-kem.js');
 const {ml_dsa65}=require('@noble/post-quantum/ml-dsa.js');
 
-const VERSION='FREE-038';
+const VERSION='FREE-039';
 const RELAY=String(process.env.FREE_RELAY_URL||'https://free-relay.onrender.com').replace(/\/$/,'');
 const WS_URL=RELAY.replace(/^http/,'ws')+'/ws';
-const DATA_DIR=path.resolve(process.env.FREE_STORAGE_DATA_DIR||path.join(__dirname,'free-storage-data'));
+const STORAGE_DIR_ENV=process.env.FREE_STORAGE_DIR||process.env.FREE_STORAGE_DATA_DIR;
+const DATA_DIR=path.resolve(STORAGE_DIR_ENV||path.join(__dirname,'free-storage-data'));
+const DATA_DIR_SOURCE=process.env.FREE_STORAGE_DIR?'FREE_STORAGE_DIR':(process.env.FREE_STORAGE_DATA_DIR?'FREE_STORAGE_DATA_DIR':'version-local default');
 const CAPACITY_MB=Math.max(100,Math.min(102400,Number(process.env.FREE_STORAGE_CAPACITY_MB||1024)));
 const ID_FILE=path.join(DATA_DIR,'storage-node-identity.json');
 const BLOBS=path.join(DATA_DIR,'replicas');
@@ -27,4 +29,4 @@ function store(ns,key,value){if(!allowedNs(ns)||typeof key!=='string'||key.lengt
 function load(ns,key){if(!allowedNs(ns)||typeof key!=='string')return null;try{const x=JSON.parse(fs.readFileSync(fileFor(ns,key),'utf8'));return x.namespace===ns&&x.key===key?x.value:null}catch{return null}}
 let retry=1000;
 function connect(){console.log(`[${VERSION}] connecting storage node ${nodeId} -> ${WS_URL}`);const ws=new WebSocket(WS_URL);ws.on('open',()=>{retry=1000});ws.on('message',raw=>{let m;try{m=JSON.parse(String(raw))}catch{return}if(m.type==='challenge'){const bytes=Buffer.from(`FREE-AUTH-2:${ident.id}:${ident.deviceId}:${m.challenge}`,'utf8');const signature=b64(ml_dsa65.sign(bytes,unb64(ident.sigSecretKey)));ws.send(JSON.stringify({type:'hello-auth',id:ident.id,deviceId:ident.deviceId,challenge:m.challenge,card:card(),signature}));return}if(m.type==='hello-ok'){console.log(`[${VERSION}] authenticated; advertising ${CAPACITY_MB} MiB`);ws.send(JSON.stringify({type:'storage-advertise',enabled:true,nodeId,capacityMb:CAPACITY_MB}));return}if(m.type==='storage-status'){console.log(`[${VERSION}] online storage nodes: ${m.available||0}`);return}if(m.type==='replica-put'){const r=store(m.namespace,m.key,m.value);ws.send(JSON.stringify({type:'replica-put-ack',namespace:m.namespace,key:m.key,stored:!!r.ok,bytes:r.bytes||0,full:!!r.full}));return}if(m.type==='replica-get'){const value=load(m.namespace,m.key);const found=value!==null;if(m.namespace==='archive-chunk')console.log(`[${VERSION}] RETRIEVE ${found?'HIT':'MISS'} ${String(m.key).slice(0,16)}…`);ws.send(JSON.stringify({type:'replica-get-response',requestId:m.requestId,namespace:m.namespace,key:m.key,found,value}));return}});ws.on('close',()=>{console.log(`[${VERSION}] disconnected; retrying`);setTimeout(connect,retry);retry=Math.min(15000,retry*1.7)});ws.on('error',e=>console.warn('storage node socket:',e.message))}
-console.log(`FREE Storage Node ${VERSION}`);console.log(`Node ID: ${nodeId}`);console.log(`Data: ${DATA_DIR}`);console.log(`Capacity: ${CAPACITY_MB} MiB`);console.log('Stores ciphertext/network recovery replicas only. It cannot decrypt user messages.');connect();
+console.log(`FREE Storage Node ${VERSION}`);console.log(`Node ID: ${nodeId}`);console.log(`Data: ${DATA_DIR}`);console.log(`Data source: ${DATA_DIR_SOURCE}`);console.log(`Capacity: ${CAPACITY_MB} MiB`);console.log('Stores ciphertext/network recovery replicas only. It cannot decrypt user messages.');connect();
